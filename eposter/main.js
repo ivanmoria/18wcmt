@@ -17,6 +17,30 @@ let isDragging=false,prevMouse={x:0,y:0},rotVel={x:0,y:0};
 let raycaster,mouse3d,nodeMeshes=[];
 const GLOBE_R=1.9;
 
+// Rebuild articles for each node from ARTICLES_DATA (authoritative source)
+// Garante que todos os artigos aparecem mesmo se data.js tiver arrays truncados
+(function(){
+  const authorArticlesMap = new Map();
+  ARTICLES_DATA.forEach(a => {
+    (a.autores||[]).forEach(author => {
+      if(!authorArticlesMap.has(author)) authorArticlesMap.set(author, []);
+      authorArticlesMap.get(author).push({
+        title: a.titulo,
+        theme: a.tema,
+        design: a.design,
+        page: ARTICLE_PAGE_MAP[a.titulo] || null
+      });
+    });
+  });
+  GRAPH_DATA.nodes.forEach(n => {
+    const arts = authorArticlesMap.get(n.id);
+    if(arts && arts.length > (n.articles||[]).length){
+      n.articles = arts;
+      n.count = arts.length;
+    }
+  });
+})();
+
 // Node map
 const NODE_MAP=new Map(GRAPH_DATA.nodes.map(n=>[n.id,n]));
 
