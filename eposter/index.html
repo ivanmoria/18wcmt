@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>A Bibliometric Analysis of the 17th WCMT · E-Poster · 18th WCMT Bologna</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+/* ============================================================
+   LANDING E-POSTER STYLES
+   ============================================================ */
+.landing-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  overflow-y: auto; overflow-x: hidden;
+  background-image: url('img/bg_hero_REV02.jpg');
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+  font-family: 'IBM Plex Mono', monospace;
+  scroll-behavior: smooth;
+  transition: opacity .7s ease, transform .7s ease;
+}
+.landing-overlay::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: rgba(4, 8, 15, 0.88);
+  z-index: 0; pointer-events: none;
+}
+.landing-overlay > * { position: relative; z-index: 1; }
+.landing-overlay.hide {
+  opacity: 0; transform: translateY(-24px); pointer-events: none;
+}
+
+/* ── LANG BAR ── */
+.lang-bar {
+  position: fixed; top: 12px; right: 14px; z-index: 10001;
+  display: flex; gap: 4px; flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.lang-btn {
+  background: rgba(4, 8, 15, 0.72);
+  border: 1px solid rgba(91, 159, 255, 0.22);
+  border-radius: 5px;
+  color: rgba(224, 232, 248, 0.55);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: .54rem; letter-spacing: .05em;
+  padding: 3px 7px; cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  display: flex; align-items: center; gap: 4px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.lang-btn:hover {
+  background: rgba(91, 159, 255, 0.18);
+  border-color: rgba(91, 159, 255, 0.5);
+  color: #e0e8f8;
+}
+.lang-btn.active {
+  background: rgba(91, 159, 255, 0.22);
+  border-color: rgba(91, 159, 255, 0.65);
+  color: #5b9fff;
+}
+
+/* ── HERO ── */
+.lhero {
+  min-height: 100svh;
+  position: relative;
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  padding: clamp(40px, 8vh, 80px) clamp(16px, 6vw, 80px);
+  text-align: center;
+}
+.lhero-bg {
+  position: absolute; inset: 0;
+  background-image: url('img/bg_hero_REV02.jpg');
+  background-size: cover; background-position: center 55%;
+}
+.lhero-bg::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(4,8,15,.65) 0%,
+    rgba(4,8,15,.38) 30%,
+    rgba(4,8,15,.62) 68%,
+    rgba(4,8,15,.95) 100%
+  );
+}
+.lhero > * { position: relative; z-index: 1; }
+
+.congress-badge {
+  display: inline-flex; align-items: center; gap: 10px;
+  border: 1px solid rgba(91, 159, 255, .45);
+  background: rgba(91, 159, 255, .08);
+  border-radius: 30px; padding: 7px 20px;
+  font-size: clamp(.55rem, .9vw, .65rem);
+  letter-spacing: .14em; color: #5b9fff;
+  margin-bottom: clamp(24px, 4vh, 40px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.congress-badge-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #5b9fff; flex-shrink: 0;
+  animation: lpulse 2.2s infinite;
+}
+@keyframes lpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.7)} }
+
+.congress-full-name {
+  font-family: 'Syne', sans-serif; font-weight: 400;
+  font-size: clamp(.75rem, 1.8vw, 1.05rem);
+  color: rgba(224, 232, 248, .72);
+  letter-spacing: .05em; margin-bottom: 10px;
+}
+.congress-location {
+  font-size: clamp(.6rem, 1.2vw, .75rem);
+  color: rgba(224, 232, 248, .45);
+  letter-spacing: .08em; margin-bottom: clamp(16px, 3vh, 28px);
+}
+
+.paper-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(1.55rem, 5vw, 3.4rem);
+  line-height: 1.13; color: #e0e8f8;
+  max-width: 860px; margin: 0 auto clamp(14px, 2.5vh, 22px);
+}
+.paper-title .hl { color: #5b9fff; }
+
+.paper-type-tag {
+  font-size: clamp(.55rem, .8vw, .62rem);
+  letter-spacing: .18em;
+  color: rgba(224, 232, 248, .4);
+  text-transform: uppercase;
+  margin-bottom: clamp(12px, 2vh, 20px);
+}
+
+.abstract-id-badge {
+  font-size: clamp(.5rem, .75vw, .58rem);
+  letter-spacing: .12em;
+  color: rgba(91, 159, 255, .65);
+  margin-bottom: clamp(32px, 6vh, 56px);
+}
+
+.hero-logos {
+  display: flex; align-items: center; justify-content: center;
+  gap: clamp(12px, 3vw, 28px); flex-wrap: wrap;
+  margin-bottom: clamp(36px, 6vh, 60px);
+}
+.hero-logos img {
+  height: clamp(36px, 5vh, 60px); object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,.7));
+  opacity: .88;
+}
+
+.hero-actions {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+
+/* lang bar in hero (landing) — duplicate for visibility */
+.hero-lang-bar {
+  display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: 18px;
+}
+.hero-lang-bar .lang-btn {
+  position: static; /* override fixed from .lang-bar */
+}
+
+.hero-enter-btn {
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: clamp(12px, 2vh, 16px) clamp(28px, 5vw, 48px);
+  background: rgba(91, 159, 255, .14);
+  color: #5b9fff;
+  border: 1px solid rgba(91, 159, 255, .55);
+  border-radius: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: clamp(.65rem, 1.2vw, .75rem);
+  letter-spacing: .08em; cursor: pointer;
+  transition: all .2s; backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.hero-enter-btn:hover {
+  background: rgba(91, 159, 255, .25);
+  border-color: #5b9fff;
+  transform: translateY(-2px);
+}
+.hero-enter-btn .arrow {
+  transition: transform .2s; font-style: normal;
+}
+.hero-enter-btn:hover .arrow { transform: translateX(4px); }
+
+.scroll-hint {
+  font-size: .58rem; letter-spacing: .1em;
+  color: rgba(224, 232, 248, .32);
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  cursor: pointer;
+  animation: sfade 3s 2s ease both;
+}
+@keyframes sfade { 0%{opacity:0} 20%{opacity:1} 80%{opacity:1} 100%{opacity:.32} }
+.scroll-hint .sarr { animation: sbounce 1.9s infinite; }
+@keyframes sbounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+
+/* ── DIVIDER ── */
+.l-divider {
+  width: 100%; height: 1px;
+  background: linear-gradient(to right, transparent, rgba(91,159,255,.18), transparent);
+}
+
+/* ── SECTIONS ── */
+.l-section {
+  max-width: 900px; margin: 0 auto;
+  padding: clamp(48px,8vh,80px) clamp(16px,6vw,40px);
+  background: rgba(10, 17, 32, 0.65);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  margin-top: 24px; margin-bottom: 24px;
+}
+
+.section-eyebrow {
+  font-size: .58rem; letter-spacing: .18em;
+  color: #5b9fff; text-transform: uppercase;
+  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.section-eyebrow::after {
+  content: ''; height: 1px;
+  background: rgba(91, 159, 255, .25);
+  max-width: 160px; width: 100%;
+}
+
+.section-heading {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(1.1rem, 3vw, 1.75rem);
+  color: #e0e8f8; margin-bottom: clamp(18px, 3vh, 28px);
+  line-height: 1.2;
+}
+
+/* Abstract subsections */
+.abstract-subsection {
+  margin-bottom: clamp(20px, 3vh, 32px);
+}
+.abstract-subsection:last-child { margin-bottom: 0; }
+.abstract-sub-heading {
+  font-size: .6rem; letter-spacing: .16em;
+  color: #5b9fff; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.abstract-body {
+  font-size: clamp(.72rem, 1.3vw, .82rem);
+  line-height: 1.9;
+  color: rgba(224, 232, 248, .75);
+  border-left: 2px solid rgba(91, 159, 255, .3);
+  padding-left: clamp(14px, 2vw, 22px);
+}
+.abstract-keywords {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  margin-top: 22px;
+}
+.kw {
+  font-size: .58rem; letter-spacing: .08em;
+  border: 1px solid rgba(91, 159, 255, .3);
+  color: rgba(91, 159, 255, .8);
+  border-radius: 20px; padding: 3px 12px;
+}
+
+/* Authors */
+.author-lead-card {
+  background: rgba(91, 159, 255, .06);
+  border: 1px solid rgba(91, 159, 255, .35);
+  border-radius: 10px; padding: clamp(18px,3vh,26px) clamp(18px,3vw,28px);
+  margin-bottom: 16px;
+  display: flex; align-items: flex-start; gap: 20px;
+  flex-wrap: wrap;
+}
+.author-lead-badge {
+  background: rgba(91, 159, 255, .15);
+  border: 1px solid rgba(91, 159, 255, .4);
+  border-radius: 6px;
+  font-size: .52rem; letter-spacing: .14em;
+  color: #5b9fff; padding: 4px 12px;
+  white-space: nowrap; flex-shrink: 0; margin-top: 4px;
+}
+.author-lead-info { display: flex; flex-direction: column; }
+.author-lead-role {
+  font-size: .58rem; letter-spacing: .14em;
+  color: #5b9fff; margin-bottom: 7px;
+}
+.author-lead-name {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(1rem, 2.5vw, 1.3rem);
+  color: #e0e8f8; margin-bottom: 5px;
+}
+.author-lead-affil {
+  font-size: .65rem; color: rgba(224,232,248,.55); line-height: 1.6;
+}
+
+.coauthors-heading {
+  font-size: .6rem; letter-spacing: .12em;
+  color: rgba(224, 232, 248, .4); margin-bottom: 12px;
+}
+.coauthors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px,100%), 1fr));
+  gap: 10px;
+}
+.coauthor-card {
+  background: rgba(16, 24, 40, .7);
+  border: 1px solid rgba(24, 34, 56, .9);
+  border-radius: 8px; padding: 14px 18px;
+  transition: border-color .2s;
+}
+.coauthor-card:hover { border-color: rgba(91,159,255,.35); }
+.coauthor-role {
+  font-size: .52rem; letter-spacing: .12em;
+  color: #5b9fff; margin-bottom: 6px;
+}
+.coauthor-name {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: .9rem; color: #e0e8f8; margin-bottom: 3px;
+}
+.coauthor-affil {
+  font-size: .6rem; color: rgba(224,232,248,.5); line-height: 1.5;
+}
+
+/* Contact */
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px,100%), 1fr));
+  gap: 12px;
+}
+.contact-card {
+  background: rgba(16, 24, 40, .6);
+  border: 1px solid rgba(24, 34, 56, .8);
+  border-radius: 8px; padding: 16px 20px;
+}
+.contact-card-label {
+  font-size: .55rem; letter-spacing: .14em;
+  color: #5b9fff; margin-bottom: 8px;
+}
+.contact-card-val {
+  font-size: .72rem; color: rgba(224,232,248,.8); line-height: 1.6;
+}
+.contact-card-val a { color: #5b9fff; text-decoration: none; }
+.contact-card-val a:hover { text-decoration: underline; }
+
+/* CTA section */
+.l-cta {
+  padding: clamp(60px,10vh,100px) clamp(16px,6vw,40px) clamp(60px,10vh,100px);
+  text-align: center; position: relative;
+}
+.l-cta::before {
+  content: ''; position: absolute;
+  top: 0; left: 50%; transform: translateX(-50%);
+  width: 1px; height: clamp(40px,6vh,60px);
+  background: linear-gradient(to bottom, transparent, rgba(91,159,255,.3));
+}
+
+.cta-main-btn {
+  display: inline-flex; align-items: center; gap: 16px;
+  padding: clamp(16px,2.5vh,20px) clamp(36px,8vw,64px);
+  background: linear-gradient(135deg, #5b9fff 0%, #3a6fdd 100%);
+  color: #fff; border: none; border-radius: 7px;
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(.85rem, 2vw, 1.05rem);
+  letter-spacing: .04em; cursor: pointer;
+  transition: transform .25s, box-shadow .25s;
+  box-shadow: 0 4px 30px rgba(91,159,255,.35);
+}
+.cta-main-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 44px rgba(91,159,255,.52);
+}
+.cta-main-btn .arrow {
+  font-size: 1.1em; transition: transform .2s; font-style: normal;
+}
+.cta-main-btn:hover .arrow { transform: translateX(5px); }
+.cta-sub-note {
+  margin-top: 18px; font-size: .6rem;
+  color: rgba(224,232,248,.3); letter-spacing: .08em;
+}
+
+/* Footer strip */
+.l-footer {
+  border-top: 1px solid rgba(24,34,56,.9);
+  padding: 20px clamp(16px,6vw,40px);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
+  font-size: .58rem; color: rgba(224,232,248,.3);
+  max-width: 900px; margin: 0 auto;
+}
+
+/* ============================================================
+   TOPBAR FIX — visibility against Bologna image
+   ============================================================ */
+.topbar-bg { opacity: .35 !important; }
+
+.topbar::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(4,8,15,.88) 0%,
+    rgba(4,8,15,.65) 45%,
+    rgba(4,8,15,.78) 100%
+  );
+  z-index: 0; pointer-events: none;
+}
+
+.logo { text-shadow: 0 1px 6px rgba(0,0,0,.9) !important; }
+
+.tab {
+  background: rgba(4,8,15,.75) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+.tab.on { background: rgba(10,17,32,.94) !important; }
+.tab:hover { background: rgba(10,17,32,.88) !important; }
+
+/* Light / warm theme tab overrides */
+[data-theme="light"] .tab {
+  background: rgba(237,227,216,.88) !important;
+  color: var(--dim) !important;
+  text-shadow: none !important;
+  border-color: var(--bord) !important;
+}
+[data-theme="light"] .tab.on {
+  background: rgba(255,255,255,.97) !important;
+  color: var(--acc) !important;
+  border-color: var(--acc) !important;
+}
+[data-theme="light"] .tab:hover {
+  background: rgba(255,255,255,.8) !important;
+  color: var(--txt) !important;
+}
+[data-theme="light"] .top-btn {
+  background: rgba(237,227,216,.85) !important;
+  color: var(--dim) !important;
+  text-shadow: none !important;
+}
+[data-theme="light"] .spill {
+  background: rgba(237,227,216,.75) !important;
+  color: var(--dim) !important;
+}
+[data-theme="warm"] .tab {
+  background: rgba(25,16,8,.82) !important;
+  text-shadow: none !important;
+}
+[data-theme="warm"] .tab.on {
+  background: rgba(45,30,12,.96) !important;
+}
+
+.top-btn {
+  background: rgba(4,8,15,.75) !important;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.spill {
+  background: rgba(4,8,15,.65) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* ── LANGUAGE TOGGLE (topbar) ── */
+.lang-toggle-wrap {
+  position: relative; flex-shrink: 0; margin-left: 4px;
+}
+.lang-toggle-btn {
+  padding: 3px 8px;
+  border: 1px solid rgba(91,159,255,.45);
+  border-radius: 4px;
+  background: rgba(4,8,15,.75) !important;
+  color: var(--txt);
+  font-size: .75rem; cursor: pointer;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  transition: border-color .15s;
+  white-space: nowrap;
+}
+.lang-toggle-btn:hover { border-color: var(--acc); }
+.lang-toggle-dropdown {
+  display: none;
+  position: absolute; top: calc(100% + 5px); right: 0;
+  background: var(--surf2);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  padding: 5px;
+  z-index: 9000;
+  box-shadow: 0 6px 24px rgba(0,0,0,.5);
+  min-width: 120px;
+  flex-direction: column; gap: 3px;
+}
+.lang-toggle-dropdown.open { display: flex; }
+.lang-toggle-dropdown .lang-btn {
+  justify-content: flex-start;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: .62rem;
+  width: 100%;
+}
+
+/* ── HAMBURGER / MOBILE NAV ── */
+.hamburger {
+  display: none;
+  background: rgba(4,8,15,.75);
+  border: 1px solid rgba(91,159,255,.35);
+  border-radius: 4px;
+  color: var(--txt);
+  font-size: 1rem; cursor: pointer;
+  padding: 3px 9px;
+  margin-left: auto;
+  backdrop-filter: blur(5px);
+  transition: background .15s;
+  flex-shrink: 0;
+  z-index: 1;
+}
+.hamburger:hover { background: rgba(91,159,255,.15); }
+[data-theme="light"] .hamburger {
+  background: rgba(237,227,216,.85) !important;
+  color: var(--dim);
+  border-color: var(--bord);
+}
+
+.topbar-nav {
+  display: contents; /* default: all children join flex row as usual */
+}
+/* ── LANDING: inline lang bar inside hero ── */
+.hero-lang-inline {
+  display: flex; gap: 5px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: clamp(20px,3.5vh,32px);
+}
+.hero-lang-inline .lang-btn {
+  position: static;
+  font-size: .62rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(4,8,15,.6) !important;
+  backdrop-filter: blur(8px);
+}
+
+/* ============================================================
+   LIGHT / WARM THEME TABLE FIXES
+   ============================================================ */
+[data-theme="light"] .stage { background: var(--bg); }
+[data-theme="light"] .tbl-container { background: var(--bg); }
+[data-theme="light"] tbody tr { background: var(--surf2); }
+[data-theme="warm"] .stage { background: var(--bg); }
+[data-theme="warm"] tbody tr { background: var(--surf); }
+
+/* ============================================================
+   MOBILE RESPONSIVENESS — MAIN APP
+   ============================================================ */
+.sidebar-toggle {
+  display: none;
+  position: fixed; bottom: 16px; left: 16px; z-index: 500;
+  background: var(--surf2); border: 1px solid var(--bord);
+  color: var(--acc); border-radius: 50%;
+  width: 42px; height: 42px;
+  font-size: 1rem; cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0,0,0,.5);
+  align-items: center; justify-content: center;
+  transition: background .2s;
+}
+.sidebar-toggle:hover { background: var(--mute); }
+
+@media(max-width:900px) {
+  :root { --header-h: auto; }
+  .shell { grid-template-rows: auto 1fr; }
+  .topbar { padding: 7px 10px; gap: 6px; min-height: unset; flex-wrap: nowrap; }
+  .logo { font-size: .78rem !important; }
+  .top-stats { display: none; }
+  .workspace { height: calc(100dvh - 50px); }
+}
+
+/* ── Hamburger activates at 900px ── */
+@media(max-width:900px) {
+  .hamburger { display: flex !important; align-items: center; }
+
+  /* topbar-nav becomes a collapsible panel */
+  .topbar-nav {
+    display: none;
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    background: rgba(4,8,15,.97);
+    border-bottom: 1px solid rgba(91,159,255,.25);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 300;
+    flex-direction: column;
+    padding: 8px 10px 10px;
+    gap: 8px;
+  }
+  .topbar-nav.open { display: flex; }
+
+  .tab-row {
+    width: 100%;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 3px; padding-bottom: 1px;
+  }
+  .tab-row::-webkit-scrollbar { display: none; }
+  .tab { font-size: .58rem !important; padding: 4px 9px !important; white-space: nowrap; }
+
+  .nav-controls {
+    display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  }
+
+  /* Inside nav, lang dropdown opens upward on mobile */
+  .lang-toggle-dropdown {
+    top: auto; bottom: calc(100% + 5px);
+  }
+
+  [data-theme="light"] .topbar-nav { background: rgba(244,237,228,.97); }
+  [data-theme="warm"] .topbar-nav { background: rgba(25,16,8,.97); }
+}
+
+/* ── Mobile: sidebar as drawer ── */
+@media(max-width:680px) {
+  .workspace {
+    flex-direction: column;
+    height: calc(100dvh - 50px);
+  }
+  .sidebar {
+    position: fixed !important;
+    top: 0; left: 0;
+    width: min(300px, 85vw) !important;
+    height: 100dvh !important;
+    z-index: 400;
+    transform: translateX(-110%);
+    transition: transform .28s ease;
+    box-shadow: 4px 0 20px rgba(0,0,0,.6);
+    border-right: 1px solid var(--bord) !important;
+    overflow-y: auto;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop {
+    display: none;
+    position: fixed; inset: 0; z-index: 399;
+    background: rgba(4,8,15,.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .sidebar-backdrop.show { display: block; }
+  .stage { flex: 1; width: 100% !important; height: 100% !important; }
+  .sidebar-toggle { display: flex !important; }
+  .tip { font-size: .6rem !important; }
+  .status { font-size: .6rem !important; }
+}
+
+/* Landing responsive touch-ups */
+@media(max-width:600px) {
+  .author-lead-card { flex-direction: column; gap: 10px; }
+  .l-footer { justify-content: center; text-align: center; }
+  .landing-overlay::before { background-attachment: scroll; }
+  .landing-overlay { background-attachment: scroll; }
+  .hero-lang-inline .lang-btn { font-size: .56rem; padding: 3px 8px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     LANDING E-POSTER PAGE
+     ============================================================ -->
+<div class="landing-overlay" id="landing">
+
+  <!-- ── HERO ── -->
+  <section class="lhero">
+    <div class="lhero-bg"></div>
+
+    <div class="congress-badge">
+      <span class="congress-badge-dot"></span>
+      <span data-i18n="badge">18TH WORLD CONGRESS OF MUSIC THERAPY · E-POSTER</span>
+    </div>
+
+    <div class="congress-full-name" data-i18n="congress">18th World Congress of Music Therapy</div>
+    <div class="congress-location" data-i18n="location">Bologna, Italy · 2026</div>
+
+    <h1 class="paper-title">
+      A <span class="hl">Bibliometric Analysis</span> of the<br>
+      17th World Congress of Music Therapy
+    </h1>
+    <div class="paper-type-tag" data-i18n="type_tag">Interactive E-Poster Presentation</div>
+    <div class="abstract-id-badge" data-i18n="abstract_id">Abstract ID: WMT24205-01</div>
+
+    <!-- Language selector — centered below title -->
+    <div class="hero-lang-inline">
+      <button class="lang-btn active" data-lang="en" onclick="setLang('en');updateLangToggle('en')" title="English">🇬🇧 EN</button>
+      <button class="lang-btn" data-lang="pt" onclick="setLang('pt');updateLangToggle('pt')" title="Português">🇧🇷 PT</button>
+      <button class="lang-btn" data-lang="it" onclick="setLang('it');updateLangToggle('it')" title="Italiano">🇮🇹 IT</button>
+      <button class="lang-btn" data-lang="de" onclick="setLang('de');updateLangToggle('de')" title="Deutsch">🇩🇪 DE</button>
+      <button class="lang-btn" data-lang="es" onclick="setLang('es');updateLangToggle('es')" title="Español">🇪🇸 ES</button>
+      <button class="lang-btn" data-lang="ja" onclick="setLang('ja');updateLangToggle('ja')" title="日本語">🇯🇵 JA</button>
+      <button class="lang-btn" data-lang="fr" onclick="setLang('fr');updateLangToggle('fr')" title="Français">🇫🇷 FR</button>
+    </div>
+
+    <div class="hero-logos">
+      <img src="img/img_2.jpg" alt="Congress logo" title="18th WCMT">
+      <img src="img/Tavola-disegno-40@2x-2.png" alt="Logo">
+    </div>
+
+    <div class="hero-actions">
+      <button class="hero-enter-btn" onclick="enterApp()">
+        <span data-i18n="enter_btn">Enter Interactive Visualization</span> <span class="arrow">→</span>
+      </button>
+      <div class="scroll-hint" onclick="document.getElementById('about-section').scrollIntoView({behavior:'smooth'})">
+        <span data-i18n="scroll_hint">scroll to learn more</span>
+        <span class="sarr">↓</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ABOUT / ABSTRACT ── -->
+  <div class="l-divider"></div>
+  <section class="l-section" id="about-section">
+    <div class="section-eyebrow" data-i18n="s_about">About this Work</div>
+    <h2 class="section-heading" data-i18n="s_abstract_heading">Abstract</h2>
+
+    <div class="abstract-subsection">
+      <div class="abstract-sub-heading" data-i18n="intro_h">Introduction</div>
+      <p class="abstract-body" data-i18n="intro_txt">This study maps the scientific panorama of the 17th World Congress of Music Therapy (held in 2023 in Canada) through a bibliometric analysis of its proceedings. Our aim was to identify main research themes, leading authors and collaboration networks, based on one possibility for collecting and analyzing the rich material presented at this congress.</p>
+    </div>
+
+    <div class="abstract-subsection">
+      <div class="abstract-sub-heading" data-i18n="methods_h">Methods</div>
+      <p class="abstract-body" data-i18n="methods_txt">A manually extracted dataset from the proceedings book was used to analyze data from 238 published abstracts. Each study was categorized by research design and target population, allowing for a quantitative overview of prevailing research trends in the field. Descriptive statistics and co-authorship network analysis were conducted using the bibliometrix R-tool (Aria &amp; Cuccurullo, 2017).</p>
+    </div>
+
+    <div class="abstract-subsection">
+      <div class="abstract-sub-heading" data-i18n="results_h">Results</div>
+      <p class="abstract-body" data-i18n="results_txt">Clements-Cortés A emerged as a leading author. Co-authorship analysis revealed five main collaboration clusters, with Chan V, Mercadal-Brotons M, and Zanini C as key connectors across groups. Analysis of target populations showed that the most represented group was the Music Therapy Community and related professionals (83 studies), followed by studies with a Gerontological perspective (29). Studies about mental health and children were also significant, each nearing 25. Regarding study designs, experience reports and clinical practice studies were the most prominent, totaling 87. Among theoretical and clinical studies, approximately 50% were qualitative, 12% quantitative, and 38% used mixed methods.</p>
+    </div>
+
+    <div class="abstract-subsection">
+      <div class="abstract-sub-heading" data-i18n="discuss_h">Discussion / Conclusion</div>
+      <p class="abstract-body" data-i18n="discuss_txt">This study provided an overview of collaboration networks, key research themes and connections between groups, helping to understand the scientific dynamics of the music therapy community. The prominence of experience reports reflects the field's strong commitment to applied knowledge, while the diversity in study designs underscores its methodological pluralism. These insights can guide future research and foster strategic partnerships, broadening the field's impact and interdisciplinarity.</p>
+    </div>
+
+    <div class="abstract-keywords">
+      <span class="kw">Bibliometrics</span>
+      <span class="kw">Conference Analysis</span>
+    </div>
+  </section>
+
+  <!-- ── AUTHORS ── -->
+  <div class="l-divider"></div>
+  <section class="l-section">
+    <div class="section-eyebrow" data-i18n="s_authors">Authors</div>
+    <h2 class="section-heading" data-i18n="s_authors">Authors</h2>
+
+    <!-- Lead author -->
+    <div class="author-lead-card">
+      <span class="author-lead-badge">1ST AUTHOR</span>
+      <div class="author-lead-info">
+        <div class="author-lead-role" data-i18n="lead_role">IDEALIZATION · INTERFACE DESIGN · FIRST AUTHOR · ANALYSIS</div>
+        <div class="author-lead-name">Ivan Moriá Borges</div>
+        <div class="author-lead-affil">
+          Universidade Federal de Minas Gerais (UFMG)<br>
+          Belo Horizonte, Brazil
+        </div>
+      </div>
+    </div>
+
+    <!-- Co-authors -->
+    <div class="coauthors-heading" data-i18n="coauthor_role">CO-AUTHOR · ANALYSIS</div>
+    <div class="coauthors-grid">
+      <div class="coauthor-card">
+        <div class="coauthor-role" data-i18n="coauthor_role">CO-AUTHOR · ANALYSIS</div>
+        <div class="coauthor-name">G.B. Almeida</div>
+        <div class="coauthor-affil">UFMG<br>Brazil</div>
+      </div>
+      <div class="coauthor-card">
+        <div class="coauthor-role" data-i18n="coauthor_role">CO-AUTHOR · ANALYSIS</div>
+        <div class="coauthor-name">F. Pedrosa</div>
+        <div class="coauthor-affil">UFMG<br>Brazil</div>
+      </div>
+      <div class="coauthor-card">
+        <div class="coauthor-role" data-i18n="coauthor_role">CO-AUTHOR · ANALYSIS</div>
+        <div class="coauthor-name">B. Salles</div>
+        <div class="coauthor-affil">Universidade Federal do Rio de Janeiro (UFRJ)<br>Brazil</div>
+      </div>
+      <div class="coauthor-card">
+        <div class="coauthor-role" data-i18n="coauthor_role">CO-AUTHOR · ANALYSIS</div>
+        <div class="coauthor-name">C. Zanini</div>
+        <div class="coauthor-affil">Universidade Federal de Goiás (UFG)<br>Brazil</div>
+      </div>
+      <div class="coauthor-card">
+        <div class="coauthor-role" data-i18n="coauthor_role">CO-AUTHOR · ANALYSIS</div>
+        <div class="coauthor-name">N.N. Ansay</div>
+        <div class="coauthor-affil">UNESPAR<br>Brazil</div>
+      </div>
+      <div class="coauthor-card">
+        <div class="coauthor-role" data-i18n="coauthor_role">CO-AUTHOR · ANALYSIS</div>
+        <div class="coauthor-name">Y.A. Giffoni</div>
+        <div class="coauthor-affil">Faculdade Santa Marcelina<br>Brazil</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CONTACT ── -->
+  <div class="l-divider"></div>
+  <section class="l-section">
+    <div class="section-eyebrow" data-i18n="s_contact">Contact</div>
+    <h2 class="section-heading" data-i18n="s_contact">Contact</h2>
+    <div class="contact-grid">
+      <div class="contact-card">
+        <div class="contact-card-label" data-i18n="contact_email_lbl">EMAIL</div>
+        <div class="contact-card-val">
+          <a href="mailto:ivanmoriabr@gmail.com">ivanmoriabr@gmail.com</a>
+        </div>
+      </div>
+      <div class="contact-card">
+        <div class="contact-card-label" data-i18n="contact_inst_lbl">INSTITUTION</div>
+        <div class="contact-card-val">Universidade Federal de Minas Gerais (UFMG)<br>Belo Horizonte, Brazil</div>
+      </div>
+      <div class="contact-card">
+        <div class="contact-card-label" data-i18n="contact_presented_lbl">PRESENTED AT</div>
+        <div class="contact-card-val">
+          18th World Congress of Music Therapy<br>
+          Bologna, Italy · 2026
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA ── -->
+  <div class="l-divider"></div>
+  <div class="l-cta">
+    <button class="cta-main-btn" onclick="enterApp()">
+      <span data-i18n="enter_btn">Enter Interactive Visualization</span> <span class="arrow">→</span>
+    </button>
+    <div class="cta-sub-note" data-i18n="cta_note">
+      Global Co-authorship Network · 458 Authors · 238 Articles · 983 Connections
+    </div>
+  </div>
+
+  <div class="l-divider"></div>
+  <footer class="l-footer">
+    <span data-i18n="footer1">18th World Congress of Music Therapy · Bologna 2026</span>
+    <span data-i18n="footer2">A Bibliometric Analysis of the 17th WCMT</span>
+    <span data-i18n="footer3">Borges et al., 2026</span>
+  </footer>
+
+</div><!-- /landing -->
+
+<!-- ============================================================
+     SIDEBAR BACKDROP (mobile)
+     ============================================================ -->
+<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+<button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Filtros">☰</button>
+
+<!-- ============================================================
+     MAIN APP
+     ============================================================ -->
+<div class="shell">
+<div class="topbar" style="position:relative">
+  <div class="topbar-bg"></div>
+  <div class="logo" data-i18n="logo_text">18th WCMT · <em>Coauthorship Network</em></div>
+
+  <!-- Hamburger (mobile only) -->
+  <button class="hamburger" id="hamburger" onclick="toggleNav()" aria-label="Menu">☰</button>
+
+  <!-- Collapsible nav (desktop: always shown via display:contents; mobile: toggled) -->
+  <div class="topbar-nav" id="topbar-nav">
+    <div class="tab-row">
+      <button class="tab on" id="tab-globe" onclick="switchTab('globe')" data-i18n="tab_map">🌍 Map</button>
+      <button class="tab" id="tab-net" onclick="switchTab('net')" data-i18n="tab_net">🔗 Network</button>
+      <button class="tab" id="tab-regions" onclick="switchTab('regions')" data-i18n="tab_reg">🗺 Regions</button>
+      <button class="tab" id="tab-themes" onclick="switchTab('themes')" data-i18n="tab_thm">🎯 Themes</button>
+      <button class="tab" id="tab-authors" onclick="switchTab('authors')" data-i18n="tab_aut">👤 Authors</button>
+      <button class="tab" id="tab-articles" onclick="switchTab('articles')" data-i18n="tab_art">📄 Articles</button>
+      <button class="tab" id="tab-edges" onclick="switchTab('edges')" data-i18n="tab_edg">🔗 Relations</button>
+    </div>
+    <div class="nav-controls">
+      <div class="top-stats">
+        <div class="spill"><b id="s-nodes">458</b> <span data-i18n="lbl_authors">authors</span></div>
+        <div class="spill"><b id="s-edges">983</b> <span data-i18n="lbl_collab">collab.</span></div>
+        <div class="spill"><b>238</b> <span data-i18n="lbl_articles">articles</span></div>
+      </div>
+      <button class="top-btn" onclick="location.reload()" data-i18n="reset_btn">⌖ Reset</button>
+      <div style="display:flex;gap:3px;flex-shrink:0">
+        <button class="top-btn" id="theme-dark" onclick="setTheme('dark')" title="Dark" style="padding:3px 7px">🌙</button>
+        <button class="top-btn lit" id="theme-light" onclick="setTheme('light')" title="Light Bologna" style="padding:3px 7px">☀️</button>
+        <button class="top-btn" id="theme-warm" onclick="setTheme('warm')" title="Warm" style="padding:3px 7px">🟠</button>
+      </div>
+      <button class="top-btn" onclick="showLanding()" title="Back to E-Poster" style="padding:3px 9px;font-size:.6rem;color:var(--acc);border-color:var(--acc)" data-i18n="back_poster">← Poster</button>
+    </div>
+  </div>
+
+  <!-- Language toggle button (single flag + dropdown) -->
+  <div class="lang-toggle-wrap" style="flex-shrink:0;z-index:1">
+    <button class="lang-toggle-btn" id="lang-toggle-btn" onclick="toggleLangDropdown()" title="Language / Idioma">🇬🇧 ▾</button>
+    <div class="lang-toggle-dropdown" id="lang-toggle-dropdown">
+      <button class="lang-btn active" data-lang="en" onclick="setLang('en');updateLangToggle('en');closeLangDropdown()">🇬🇧 English</button>
+      <button class="lang-btn" data-lang="pt" onclick="setLang('pt');updateLangToggle('pt');closeLangDropdown()">🇧🇷 Português</button>
+      <button class="lang-btn" data-lang="it" onclick="setLang('it');updateLangToggle('it');closeLangDropdown()">🇮🇹 Italiano</button>
+      <button class="lang-btn" data-lang="de" onclick="setLang('de');updateLangToggle('de');closeLangDropdown()">🇩🇪 Deutsch</button>
+      <button class="lang-btn" data-lang="es" onclick="setLang('es');updateLangToggle('es');closeLangDropdown()">🇪🇸 Español</button>
+      <button class="lang-btn" data-lang="ja" onclick="setLang('ja');updateLangToggle('ja');closeLangDropdown()">🇯🇵 日本語</button>
+      <button class="lang-btn" data-lang="fr" onclick="setLang('fr');updateLangToggle('fr');closeLangDropdown()">🇫🇷 Français</button>
+    </div>
+  </div>
+</div>
+
+<div class="workspace">
+  <div class="sidebar" id="sidebar">
+      <div id="sidebar-filters">
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_search">Search author</div>
+      <div class="srch" id="srch-wrap">
+        <span class="srch-ico">⌕</span>
+        <input id="srch-in" type="text" data-i18n-ph="search_ph" placeholder="Name..." oninput="doSearch(this.value)" autocomplete="off">
+        <div class="srch-drop" id="srch-drop"></div>
+      </div>
+    </div>
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_partnerships">Partnerships</div>
+      <button class="cpill" id="btn-direct" onclick="toggleDirectOnly()" style="width:100%;justify-content:center" data-i18n="btn_same_paper">Same paper only</button>
+    </div>
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_filters">Filters</div>
+      <div class="sl-row"><span class="sl-lbl" data-i18n="lbl_min_collab">Min. collaborations</span><span class="sl-val" id="v-me">1</span></div>
+      <input type="range" min="1" max="3" value="1" id="sl-me" oninput="onFilt()">
+      <div class="sl-row" style="margin-top:6px"><span class="sl-lbl" data-i18n="lbl_min_articles">Min. author articles</span><span class="sl-val" id="v-mn">1</span></div>
+      <input type="range" min="1" max="9" value="1" id="sl-mn" oninput="onFilt()">
+    </div>
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_color_by">Color nodes by</div>
+      <div class="cpills">
+        <button class="cpill on" id="cp-region" onclick="setColor('region')" data-i18n="color_region">Region</button>
+        <button class="cpill" id="cp-theme" onclick="setColor('theme')" data-i18n="color_theme">Theme</button>
+        <button class="cpill" id="cp-count" onclick="setColor('count')" data-i18n="color_volume">Volume</button>
+      </div>
+    </div>
+    <div class="sblk" id="sec-region">
+      <div class="slbl" data-i18n="s_regions">Regions</div>
+      <div class="chip-grid" id="region-chips"></div>
+    </div>
+    <div class="sblk" id="sec-theme" style="display:none">
+      <div class="slbl" data-i18n="s_themes">Themes</div>
+      <div class="chip-grid" id="theme-chips"></div>
+    </div>
+    <div class="legend-area">
+      <div class="slbl" data-i18n="s_legend">Legend</div>
+      <div id="leg-items"></div>
+      <div style="margin-top:10px">
+        <div class="slbl" data-i18n="legend_size">Size = no. of articles</div>
+        <div class="leg-row"><div class="leg-dot" style="width:5px;height:5px;background:var(--dim)"></div><span class="leg-lbl" data-i18n="legend_1">1 article</span></div>
+        <div class="leg-row"><div class="leg-dot" style="width:9px;height:9px;background:var(--dim)"></div><span class="leg-lbl" data-i18n="legend_5">5 articles</span></div>
+        <div class="leg-row"><div class="leg-dot" style="width:13px;height:13px;background:var(--dim)"></div><span class="leg-lbl" data-i18n="legend_9">9+ articles</span></div>
+      </div>
+      </div>
+    </div>
+    <div id="sidebar-card" style="display:none">
+    <div class="sc-topbar">
+      <button class="sc-back" onclick="closeSidebarCard()" data-i18n="back_filters">← Back</button>
+    </div>
+    <div class="sc-header">
+      <div class="sc-name" id="sc-name"></div>
+      <div class="sc-meta" id="sc-meta"></div>
+      <div class="sc-stat" id="sc-stat"></div>
+    </div>
+    <div class="sc-body" id="sc-body"></div>
+  </div>
+
+  </div>
+  <div class="stage" id="stage">
+    <div class="loading" id="loading">
+      <div class="spin"></div>
+      <div class="load-txt" id="load-msg" data-i18n="load_msg">Loading Earth texture…</div>
+    </div>
+    <!-- <canvas id="globe-canvas"></canvas> -->
+    <div class="d3-wrap" id="d3-wrap"><svg id="d3svg"></svg></div>
+    <div id="map2d-wrap" class="active"><svg id="map2d-svg"></svg></div>
+    <!-- Tables -->
+    <div class="tbl-wrap" id="tbl-authors">
+      <div class="tbl-search">
+        <input id="srch-authors" type="text" data-i18n-ph="ph_authors" placeholder="🔍 Filter authors..." oninput="filterTable('authors')">
+        <span class="tbl-cnt" id="cnt-authors"></span>
+      </div>
+      <div class="tbl-container"><table><thead><tr>
+        <th onclick="sortTable('authors','id',this)" data-i18n="col_author">Author</th>
+        <th onclick="sortTable('authors','country',this)" data-i18n="col_country">Country</th>
+        <th onclick="sortTable('authors','region',this)" data-i18n="col_region">Region</th>
+        <th onclick="sortTable('authors','theme',this)" data-i18n="col_theme">Theme</th>
+        <th onclick="sortTable('authors','count',this)" data-i18n="col_art">Art.</th>
+      </tr></thead><tbody id="tbody-authors"></tbody></table></div>
+    </div>
+    <div class="tbl-wrap" id="tbl-articles">
+      <div class="tbl-search">
+        <input id="srch-articles" type="text" data-i18n-ph="ph_articles" placeholder="🔍 Filter articles..." oninput="filterTable('articles')">
+        <span class="tbl-cnt" id="cnt-articles"></span>
+      </div>
+      <div class="tbl-container"><table><thead><tr>
+        <th onclick="sortTable('articles','num',this)" data-i18n="col_num">#</th>
+        <th onclick="sortTable('articles','titulo',this)" data-i18n="col_title">Title</th>
+        <th onclick="sortTable('articles','tema',this)" data-i18n="col_theme">Theme</th>
+        <th onclick="sortTable('articles','design',this)" data-i18n="col_design">Design</th>
+        <th onclick="sortTable('articles','pais',this)" data-i18n="col_country">Country</th>
+        <th onclick="sortTable('articles','num_autores',this)" data-i18n="col_auth">Auth.</th>
+        <th onclick="sortTable('articles','num_refs',this)" data-i18n="col_ref">Ref.</th>
+      </tr></thead><tbody id="tbody-articles"></tbody></table></div>
+    </div>
+    <div class="tbl-wrap" id="tbl-edges">
+      <div class="tbl-search">
+        <input id="srch-edges" type="text" data-i18n-ph="ph_edges" placeholder="🔍 Filter relations..." oninput="filterTable('edges')">
+        <span class="tbl-cnt" id="cnt-edges"></span>
+      </div>
+      <div class="tbl-container"><table><thead><tr>
+        <th onclick="sortTable('edges','source',this)" data-i18n="col_source">Source (Author A)</th>
+        <th onclick="sortTable('edges','source_country',this)" data-i18n="col_ctry_a">Country A</th>
+        <th onclick="sortTable('edges','target',this)" data-i18n="col_target">Target (Author B)</th>
+        <th onclick="sortTable('edges','target_country',this)" data-i18n="col_ctry_b">Country B</th>
+        <th onclick="sortTable('edges','weight',this)" data-i18n="col_weight">Weight</th>
+      </tr></thead><tbody id="tbody-edges"></tbody></table></div>
+    </div>
+    <div class="tip" id="tip"></div>
+    <div class="status" id="status-txt" data-i18n="status_map">🌍 2D Map · Click a point to open participant card</div>
+  </div>
+  </div>
+</div>
+
+<!-- FLOATING PDF POPUP (2D MAP) -->
+<div class="pdf-popup" id="pdf-popup">
+  <div class="pdf-popup-header">
+    <div class="pdf-popup-title" id="pdf-popup-title">PDF View</div>
+    <button class="pdf-popup-close" onclick="closePdfPopup()">✕</button>
+  </div>
+  <div class="pdf-popup-body">
+    <div id="pdf-popup-container"></div>
+  </div>
+</div>
+
+<!-- PARTICIPANT CARD MODAL -->
+<div class="card-overlay" id="card-overlay" onclick="handleOverlayClick(event)">
+  <div class="pcard" id="pcard">
+    <button class="pcard-close" onclick="closeCard()" title="Close (Esc)">✕</button>
+    <div class="pcard-left-col">
+      <div class="pcard-header">
+        <div class="pcard-name" id="pc-name">—</div>
+        <div class="pcard-meta" id="pc-meta"></div>
+        <div class="pcard-stat" id="pc-stat"></div>
+        <a class="pcard-hashlink" id="pc-link" href="#">#</a>
+      </div>
+      <div class="pcard-body" id="pc-body"></div>
+    </div>
+    <div class="pcard-right-col">
+      <div id="pc-pdf-container"></div>
+    </div>
+  </div>
+</div>
+
+<script src="translations.js"></script>
+<script src="data.js"></script>
+<script src="main.js"></script>
+<script>
+/* ── LANDING LOGIC ── */
+function enterApp(){
+  const el = document.getElementById('landing');
+  el.classList.add('hide');
+  setTimeout(()=>{ el.style.display='none'; }, 700);
+}
+
+function showLanding(){
+  const el = document.getElementById('landing');
+  el.style.display='block';
+  requestAnimationFrame(()=>{ el.classList.remove('hide'); });
+  el.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* ── HAMBURGER NAV ── */
+function toggleNav(){
+  const nav = document.getElementById('topbar-nav');
+  const ham = document.getElementById('hamburger');
+  const isOpen = nav.classList.toggle('open');
+  ham.textContent = isOpen ? '✕' : '☰';
+}
+
+function closeNav(){
+  const nav = document.getElementById('topbar-nav');
+  const ham = document.getElementById('hamburger');
+  nav.classList.remove('open');
+  ham.textContent = '☰';
+}
+
+/* ── LANGUAGE TOGGLE (topbar) ── */
+const LANG_FLAGS = {en:'🇬🇧',pt:'🇧🇷',it:'🇮🇹',de:'🇩🇪',es:'🇪🇸',ja:'🇯🇵',fr:'🇫🇷'};
+
+function updateLangToggle(lang){
+  const btn = document.getElementById('lang-toggle-btn');
+  if(btn) btn.textContent = (LANG_FLAGS[lang]||'🌐') + ' ▾';
+  // sync all lang-btn active states everywhere
+  document.querySelectorAll('.lang-btn').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-lang')===lang);
+  });
+}
+
+function toggleLangDropdown(){
+  document.getElementById('lang-toggle-dropdown').classList.toggle('open');
+}
+
+function closeLangDropdown(){
+  document.getElementById('lang-toggle-dropdown').classList.remove('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e=>{
+  const wrap = document.getElementById('lang-toggle-btn');
+  const drop = document.getElementById('lang-toggle-dropdown');
+  if(wrap && drop && !wrap.contains(e.target) && !drop.contains(e.target)){
+    drop.classList.remove('open');
+  }
+});
+
+/* ── MOBILE SIDEBAR LOGIC ── */
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sidebar-backdrop');
+  const isOpen = sb.classList.toggle('open');
+  bd.classList.toggle('show', isOpen);
+}
+
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-backdrop').classList.remove('show');
+}
+
+/* Close sidebar on tab switch (mobile) */
+document.addEventListener('DOMContentLoaded', ()=>{
+  if(typeof switchTab === 'function'){
+    const orig = switchTab;
+    window.switchTab = function(t){
+      orig(t);
+      if(window.innerWidth < 680) closeSidebar();
+    };
+  }
+  initLang();
+  // Sync toggle button with initial lang
+  try { updateLangToggle(localStorage.getItem('wcmt_lang')||'en'); } catch(e){}
+  // Close nav when tab is switched on mobile
+  if(typeof switchTab === 'function'){
+    const _orig = switchTab;
+    window.switchTab = function(t){
+      _orig(t);
+      if(window.innerWidth <= 900) closeNav();
+      if(window.innerWidth < 680) closeSidebar();
+    };
+  }
+});
+</script>
+</body>
+</html>
