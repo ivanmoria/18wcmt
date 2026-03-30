@@ -699,9 +699,14 @@
       <button class="lang-btn" data-lang="fr" onclick="setLang('fr');updateLangToggle('fr')" title="Français">🇫🇷 FR</button>
     </div>
 
-    <div class="hero-logos">
-      <img src="img/img_2.jpg" alt="Congress logo" title="18th WCMT">
-      <img src="img/Tavola-disegno-40@2x-2.png" alt="Logo">
+    <!-- Theme selector on welcome screen -->
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:clamp(16px,2.5vh,24px)">
+      <button onclick="setTheme('dark')" id="landing-theme-dark"
+        style="padding:5px 14px;border-radius:20px;border:1px solid rgba(91,159,255,.4);background:rgba(4,8,15,.6);color:#c0d0e8;font-size:.65rem;cursor:pointer;backdrop-filter:blur(6px);transition:border-color .15s">🌙 Dark</button>
+      <button onclick="setTheme('light')" id="landing-theme-light"
+        style="padding:5px 14px;border-radius:20px;border:1px solid rgba(192,57,43,.4);background:rgba(4,8,15,.6);color:#c0d0e8;font-size:.65rem;cursor:pointer;backdrop-filter:blur(6px);transition:border-color .15s">☀️ Light</button>
+      <button onclick="setTheme('warm')" id="landing-theme-warm"
+        style="padding:5px 14px;border-radius:20px;border:1px solid rgba(232,160,64,.4);background:rgba(4,8,15,.6);color:#c0d0e8;font-size:.65rem;cursor:pointer;backdrop-filter:blur(6px);transition:border-color .15s">🟠 Warm</button>
     </div>
 
     <div class="hero-actions">
@@ -892,18 +897,9 @@
     </div>
   </div>
 
-  <!-- Language toggle button (single flag + dropdown) -->
-  <div class="lang-toggle-wrap" style="flex-shrink:0;z-index:1">
-    <button class="lang-toggle-btn" id="lang-toggle-btn" onclick="toggleLangDropdown()" title="Language / Idioma">🇬🇧 ▾</button>
-    <div class="lang-toggle-dropdown" id="lang-toggle-dropdown">
-      <button class="lang-btn active" data-lang="en" onclick="setLang('en');updateLangToggle('en');closeLangDropdown()">🇬🇧 English</button>
-      <button class="lang-btn" data-lang="pt" onclick="setLang('pt');updateLangToggle('pt');closeLangDropdown()">🇧🇷 Português</button>
-      <button class="lang-btn" data-lang="it" onclick="setLang('it');updateLangToggle('it');closeLangDropdown()">🇮🇹 Italiano</button>
-      <button class="lang-btn" data-lang="de" onclick="setLang('de');updateLangToggle('de');closeLangDropdown()">🇩🇪 Deutsch</button>
-      <button class="lang-btn" data-lang="es" onclick="setLang('es');updateLangToggle('es');closeLangDropdown()">🇪🇸 Español</button>
-      <button class="lang-btn" data-lang="ja" onclick="setLang('ja');updateLangToggle('ja');closeLangDropdown()">🇯🇵 日本語</button>
-      <button class="lang-btn" data-lang="fr" onclick="setLang('fr');updateLangToggle('fr');closeLangDropdown()">🇫🇷 Français</button>
-    </div>
+  <!-- Language toggle button → opens centered popup -->
+  <div style="flex-shrink:0;z-index:1">
+    <button class="lang-toggle-btn" id="lang-toggle-btn" onclick="openLangPopup()" title="Language / Idioma">🇬🇧 ▾</button>
   </div>
 </div>
 
@@ -985,48 +981,110 @@
     <div class="d3-wrap" id="d3-wrap"><svg id="d3svg"></svg></div>
     <!-- Network controls overlay (shown only on net tab) -->
     <div id="net-ctrl-panel" style="display:none;position:absolute;bottom:18px;right:18px;z-index:80;
-      flex-direction:column;gap:7px;background:rgba(4,8,15,.88);backdrop-filter:blur(8px);
-      border:1px solid rgba(91,159,255,.25);border-radius:8px;padding:10px 13px;min-width:185px;
+      flex-direction:column;gap:0;background:rgba(4,8,15,.88);backdrop-filter:blur(8px);
+      border:1px solid rgba(91,159,255,.25);border-radius:8px;padding:8px 10px;min-width:185px;
       font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:#c0d0e8;">
-      <div style="font-size:.6rem;color:#5b9fff;letter-spacing:.04em;margin-bottom:2px;opacity:.8">NETWORK CONTROLS</div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="width:66px;opacity:.7">Node size</span>
-        <input type="range" min="0.5" max="5" step="0.1" value="2" id="sl-nsize"
-          oninput="updateNetParam('nsize',+this.value)"
-          style="flex:1;accent-color:#5b9fff;cursor:pointer">
-        <span id="v-nsize" style="width:28px;text-align:right;color:#5b9fff">2.0×</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:.6rem;color:#5b9fff;letter-spacing:.04em;opacity:.8">NETWORK CONTROLS</span>
+        <button id="nbtn-minimize" onclick="toggleNetCtrl()" title="Minimizar"
+          style="background:none;border:none;color:#5b9fff;cursor:pointer;font-size:.8rem;padding:0 2px;line-height:1">−</button>
       </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="width:66px;opacity:.7">Distance</span>
-        <input type="range" min="8" max="140" step="4" value="30" id="sl-ldist"
-          oninput="updateNetParam('ldist',+this.value)"
-          style="flex:1;accent-color:#5b9fff;cursor:pointer">
-        <span id="v-ldist" style="width:28px;text-align:right;color:#5b9fff">30</span>
+      <div id="net-ctrl-inner" style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Node size</span>
+          <input type="range" min="0.5" max="5" step="0.1" value="2" id="sl-nsize"
+            oninput="updateNetParam('nsize',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="v-nsize" style="width:28px;text-align:right;color:#5b9fff">2.0×</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Distance</span>
+          <input type="range" min="8" max="140" step="4" value="30" id="sl-ldist"
+            oninput="updateNetParam('ldist',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="v-ldist" style="width:28px;text-align:right;color:#5b9fff">30</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Repulsion</span>
+          <input type="range" min="5" max="200" step="5" value="45" id="sl-charge"
+            oninput="updateNetParam('charge',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="v-charge" style="width:28px;text-align:right;color:#5b9fff">45</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Link width</span>
+          <input type="range" min="0.3" max="4" step="0.1" value="1" id="sl-lwidth"
+            oninput="updateNetParam('lwidth',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="v-lwidth" style="width:28px;text-align:right;color:#5b9fff">1.0×</span>
+        </div>
+        <button id="btn-lcolor" onclick="updateNetParam('lcolor',null)"
+          style="padding:4px 0;background:rgba(91,159,255,.10);border:1px solid rgba(91,159,255,.25);
+            border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
+          ⚪ Link: Padrão
+        </button>
+        <button onclick="netFitView()"
+          style="padding:4px 0;background:rgba(91,159,255,.15);border:1px solid rgba(91,159,255,.35);
+            border-radius:5px;color:#5b9fff;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
+          ⊕ Fit to view
+        </button>
+        <button onclick="exportView('net')"
+          style="padding:4px 0;background:rgba(91,159,255,.08);border:1px solid rgba(91,159,255,.2);
+            border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
+          ↓ Exportar PNG
+        </button>
       </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="width:66px;opacity:.7">Repulsion</span>
-        <input type="range" min="5" max="200" step="5" value="45" id="sl-charge"
-          oninput="updateNetParam('charge',+this.value)"
-          style="flex:1;accent-color:#5b9fff;cursor:pointer">
-        <span id="v-charge" style="width:28px;text-align:right;color:#5b9fff">45</span>
+    </div>
+    <!-- 2D Map controls overlay (shown only on globe tab) -->
+    <div id="map-ctrl-panel" style="display:flex;position:absolute;bottom:18px;right:18px;z-index:80;
+      flex-direction:column;gap:0;background:rgba(4,8,15,.88);backdrop-filter:blur(8px);
+      border:1px solid rgba(91,159,255,.25);border-radius:8px;padding:8px 10px;min-width:185px;
+      font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:#c0d0e8;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:.6rem;color:#5b9fff;letter-spacing:.04em;opacity:.8">MAP CONTROLS</span>
+        <button id="mbtn-minimize" onclick="toggleMapCtrl()" title="Minimizar"
+          style="background:none;border:none;color:#5b9fff;cursor:pointer;font-size:.8rem;padding:0 2px;line-height:1">−</button>
       </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="width:66px;opacity:.7">Link width</span>
-        <input type="range" min="0.3" max="4" step="0.1" value="1" id="sl-lwidth"
-          oninput="updateNetParam('lwidth',+this.value)"
-          style="flex:1;accent-color:#5b9fff;cursor:pointer">
-        <span id="v-lwidth" style="width:28px;text-align:right;color:#5b9fff">1.0×</span>
+      <div id="map-ctrl-inner" style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Node size</span>
+          <input type="range" min="0.3" max="3" step="0.1" value="1" id="sl-mnsize"
+            oninput="updateMapParam('nsize',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="mv-nsize" style="width:28px;text-align:right;color:#5b9fff">1.0×</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Fill</span>
+          <input type="range" min="0.1" max="2" step="0.05" value="1" id="sl-mfill"
+            oninput="updateMapParam('fill',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="mv-fill" style="width:28px;text-align:right;color:#5b9fff">100%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Dispersão</span>
+          <input type="range" min="0" max="20" step="0.5" value="2" id="sl-mcollide"
+            oninput="updateMapParam('collide',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="mv-collide" style="width:28px;text-align:right;color:#5b9fff">2</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Ancoragem</span>
+          <input type="range" min="0.05" max="1" step="0.01" value="0.92" id="sl-manchor"
+            oninput="updateMapParam('anchor',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="mv-anchor" style="width:28px;text-align:right;color:#5b9fff">0.92</span>
+        </div>
+        <button id="mbtn-nodes" onclick="updateMapParam('nodes',!mapShowNodes)"
+          style="padding:4px 0;background:rgba(91,159,255,.10);border:1px solid rgba(91,159,255,.25);
+            border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
+          ● Nós: Visível
+        </button>
+        <button onclick="exportView('map')"
+          style="padding:4px 0;background:rgba(91,159,255,.08);border:1px solid rgba(91,159,255,.2);
+            border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
+          ↓ Exportar PNG
+        </button>
       </div>
-      <button id="btn-lcolor" onclick="updateNetParam('lcolor',null)"
-        style="padding:4px 0;background:rgba(91,159,255,.10);border:1px solid rgba(91,159,255,.25);
-          border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
-        ⚪ Link: Padrão
-      </button>
-      <button onclick="netFitView()"
-        style="padding:4px 0;background:rgba(91,159,255,.15);border:1px solid rgba(91,159,255,.35);
-          border-radius:5px;color:#5b9fff;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
-        ⊕ Fit to view
-      </button>
     </div>
     <div id="map2d-wrap" class="active"><svg id="map2d-svg"></svg></div>
     <!-- Tables -->
@@ -1085,6 +1143,21 @@
   </div>
   <div class="pdf-popup-body">
     <div id="pdf-popup-container"></div>
+  </div>
+</div>
+
+<!-- LANGUAGE POPUP -->
+<div id="lang-popup-overlay" onclick="closeLangPopup()" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div onclick="event.stopPropagation()" style="background:var(--surf2);border:1px solid var(--bord);border-radius:14px;padding:28px 32px;min-width:260px;box-shadow:0 16px 48px rgba(0,0,0,.7);display:flex;flex-direction:column;gap:10px;align-items:stretch;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.1em;color:var(--dim);text-align:center;margin-bottom:6px;">LANGUAGE / IDIOMA</div>
+    <button class="lang-btn active" data-lang="en" onclick="setLang('en');updateLangToggle('en');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.75rem;border-radius:8px">🇬🇧 English</button>
+    <button class="lang-btn" data-lang="pt" onclick="setLang('pt');updateLangToggle('pt');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.75rem;border-radius:8px">🇧🇷 Português</button>
+    <button class="lang-btn" data-lang="it" onclick="setLang('it');updateLangToggle('it');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.75rem;border-radius:8px">🇮🇹 Italiano</button>
+    <button class="lang-btn" data-lang="de" onclick="setLang('de');updateLangToggle('de');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.75rem;border-radius:8px">🇩🇪 Deutsch</button>
+    <button class="lang-btn" data-lang="es" onclick="setLang('es');updateLangToggle('es');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.75rem;border-radius:8px">🇪🇸 Español</button>
+    <button class="lang-btn" data-lang="ja" onclick="setLang('ja');updateLangToggle('ja');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.75rem;border-radius:8px">🇯🇵 日本語</button>
+    <button class="lang-btn" data-lang="fr" onclick="setLang('fr');updateLangToggle('fr');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.75rem;border-radius:8px">🇫🇷 Français</button>
+    <button onclick="closeLangPopup()" style="margin-top:6px;padding:6px;background:transparent;border:1px solid var(--bord);border-radius:8px;color:var(--dim);cursor:pointer;font-size:.62rem;font-family:inherit">✕ Fechar</button>
   </div>
 </div>
 
@@ -1152,22 +1225,25 @@ function updateLangToggle(lang){
   });
 }
 
-function toggleLangDropdown(){
-  document.getElementById('lang-toggle-dropdown').classList.toggle('open');
+function openLangPopup(){
+  const p=document.getElementById('lang-popup-overlay');
+  if(p){ p.style.display='flex'; }
 }
 
-function closeLangDropdown(){
-  document.getElementById('lang-toggle-dropdown').classList.remove('open');
+function closeLangPopup(){
+  const p=document.getElementById('lang-popup-overlay');
+  if(p){ p.style.display='none'; }
 }
 
-// Close dropdown when clicking outside
-document.addEventListener('click', e=>{
-  const wrap = document.getElementById('lang-toggle-btn');
-  const drop = document.getElementById('lang-toggle-dropdown');
-  if(wrap && drop && !wrap.contains(e.target) && !drop.contains(e.target)){
-    drop.classList.remove('open');
-  }
+// Esc closes lang popup
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeLangPopup();
 });
+
+// legacy stubs (kept for any residual calls)
+function toggleLangDropdown(){ openLangPopup(); }
+function closeLangDropdown(){ closeLangPopup(); }
+
 
 /* ── MOBILE SIDEBAR LOGIC ── */
 function toggleSidebar(){
