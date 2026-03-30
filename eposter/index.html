@@ -919,6 +919,13 @@
       </div>
     </div>
     <div class="sblk">
+      <div class="slbl" data-i18n="s_country">Select Country</div>
+      <select id="country-select" onchange="filterByCountry(this.value)"
+        style="width:100%;background:var(--inset);color:var(--txt);border:1px solid var(--mute);border-radius:5px;padding:5px 8px;font-size:.65rem;font-family:inherit;cursor:pointer">
+        <option value="">— Todos os países —</option>
+      </select>
+    </div>
+    <div class="sblk">
       <div class="slbl" data-i18n="s_partnerships">Partnerships</div>
       <button class="cpill" id="btn-direct" onclick="toggleDirectOnly()" style="width:100%;justify-content:center" data-i18n="btn_same_paper">Same paper only</button>
     </div>
@@ -976,6 +983,51 @@
     </div>
     <canvas id="globe-canvas"></canvas>
     <div class="d3-wrap" id="d3-wrap"><svg id="d3svg"></svg></div>
+    <!-- Network controls overlay (shown only on net tab) -->
+    <div id="net-ctrl-panel" style="display:none;position:absolute;bottom:18px;right:18px;z-index:80;
+      flex-direction:column;gap:7px;background:rgba(4,8,15,.88);backdrop-filter:blur(8px);
+      border:1px solid rgba(91,159,255,.25);border-radius:8px;padding:10px 13px;min-width:185px;
+      font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:#c0d0e8;">
+      <div style="font-size:.6rem;color:#5b9fff;letter-spacing:.04em;margin-bottom:2px;opacity:.8">NETWORK CONTROLS</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:66px;opacity:.7">Node size</span>
+        <input type="range" min="0.5" max="5" step="0.1" value="2" id="sl-nsize"
+          oninput="updateNetParam('nsize',+this.value)"
+          style="flex:1;accent-color:#5b9fff;cursor:pointer">
+        <span id="v-nsize" style="width:28px;text-align:right;color:#5b9fff">2.0×</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:66px;opacity:.7">Distance</span>
+        <input type="range" min="8" max="140" step="4" value="30" id="sl-ldist"
+          oninput="updateNetParam('ldist',+this.value)"
+          style="flex:1;accent-color:#5b9fff;cursor:pointer">
+        <span id="v-ldist" style="width:28px;text-align:right;color:#5b9fff">30</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:66px;opacity:.7">Repulsion</span>
+        <input type="range" min="5" max="200" step="5" value="45" id="sl-charge"
+          oninput="updateNetParam('charge',+this.value)"
+          style="flex:1;accent-color:#5b9fff;cursor:pointer">
+        <span id="v-charge" style="width:28px;text-align:right;color:#5b9fff">45</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:66px;opacity:.7">Link width</span>
+        <input type="range" min="0.3" max="4" step="0.1" value="1" id="sl-lwidth"
+          oninput="updateNetParam('lwidth',+this.value)"
+          style="flex:1;accent-color:#5b9fff;cursor:pointer">
+        <span id="v-lwidth" style="width:28px;text-align:right;color:#5b9fff">1.0×</span>
+      </div>
+      <button id="btn-lcolor" onclick="updateNetParam('lcolor',null)"
+        style="padding:4px 0;background:rgba(91,159,255,.10);border:1px solid rgba(91,159,255,.25);
+          border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
+        ⚪ Link: Padrão
+      </button>
+      <button onclick="netFitView()"
+        style="padding:4px 0;background:rgba(91,159,255,.15);border:1px solid rgba(91,159,255,.35);
+          border-radius:5px;color:#5b9fff;cursor:pointer;font-family:inherit;font-size:.6rem;letter-spacing:.03em">
+        ⊕ Fit to view
+      </button>
+    </div>
     <div id="map2d-wrap" class="active"><svg id="map2d-svg"></svg></div>
     <!-- Tables -->
     <div class="tbl-wrap" id="tbl-authors">

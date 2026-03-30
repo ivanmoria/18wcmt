@@ -7,6 +7,9 @@ const COUNT_COL=d3.scaleSequential(d3.interpolateYlOrRd).domain([1,9]);
 
 let colorMode='region',activeTab='globe',paused=false;
 let minEdge=1,minNode=1;
+// Network graph parameters (controlled via net-ctrl-panel sliders)
+let netNodeSizeMult=2.0, netLinkDist=30, netCharge=45;
+let netLinkWidth=1.0, netLinkColorMode='weight'; // 'weight' | 'node'
 let activeRegions=new Set(GRAPH_DATA.regions);
 let activeThemes=new Set(GRAPH_DATA.themes);
 let sim=null,d3svg,gLinks,gNodes;
@@ -17,24 +20,35 @@ let isDragging=false,prevMouse={x:0,y:0},rotVel={x:0,y:0};
 let raycaster,mouse3d,nodeMeshes=[];
 const GLOBE_R=1.9;
 
+// Override de páginas para artigos cujo título duplicado impede lookup correto no ARTICLE_PAGE_MAP
+// (ARTICLE_PAGE_MAP é title→page; se dois artigos têm o mesmo título, apenas uma página é armazenada)
+// Art.108 vizinhos: art.107→p.254, art.109→p.259 → estimativa: p.256
+// ⚠ Confirme a página real do artigo 108 no PDF e atualize aqui se necessário
+const ARTICLE_PAGE_OVERRIDE = {
+  108: 256
+};
+
 // Rebuild articles for each node from ARTICLES_DATA (authoritative source)
 // Garante que todos os artigos aparecem mesmo se data.js tiver arrays truncados
+// Inclui 'num' no objeto de artigo para lookups precisos (evita colisão por título duplicado/trailing space)
 (function(){
   const authorArticlesMap = new Map();
   ARTICLES_DATA.forEach(a => {
+    const cleanTitle = a.titulo.trim();
     (a.autores||[]).forEach(author => {
       if(!authorArticlesMap.has(author)) authorArticlesMap.set(author, []);
       authorArticlesMap.get(author).push({
-        title: a.titulo,
+        title: cleanTitle,
+        num: a.num,
         theme: a.tema,
         design: a.design,
-        page: ARTICLE_PAGE_MAP[a.titulo] || null
+        page: ARTICLE_PAGE_OVERRIDE[a.num] || ARTICLE_PAGE_MAP[a.titulo] || ARTICLE_PAGE_MAP[cleanTitle] || null
       });
     });
   });
   GRAPH_DATA.nodes.forEach(n => {
     const arts = authorArticlesMap.get(n.id);
-    if(arts && arts.length > (n.articles||[]).length){
+    if(arts) {
       n.articles = arts;
       n.count = arts.length;
     }
@@ -43,6 +57,43 @@ const GLOBE_R=1.9;
 
 // Node map
 const NODE_MAP=new Map(GRAPH_DATA.nodes.map(n=>[n.id,n]));
+
+// ── Country normalization ──
+// Many articles list country variants (USA, United States, EUA, US, etc.)
+// Normalize them to canonical names used in our data / ISO table
+const COUNTRY_ALIASES = {
+  'usa':'United States of America','us':'United States of America',
+  'eua':'United States of America','united states':'United States of America',
+  'u.s.a.':'United States of America','u.s.':'United States of America',
+  'united states of america':'United States of America',
+  'uk':'United Kingdom','u.k.':'United Kingdom',
+  'united kingdom':'United Kingdom','england':'United Kingdom',
+  'scotland':'United Kingdom','wales':'United Kingdom',
+  'great britain':'United Kingdom',
+  'new zealand':'New Zealand','new zeland':'New Zealand',
+  'aotearoa new zealand':'New Zealand','aotearoa':'New Zealand',
+  'republic of korea':'South Korea','korea':'South Korea',
+  'south korea':'South Korea',
+  'malasya':'Malaysia','malasia':'Malaysia',
+  'brasil':'Brazil',
+  'mozambique':'Mozambique',
+  'bermuda':'Bermuda',
+};
+function normalizeCountry(c){
+  if(!c) return c;
+  const key = c.trim().toLowerCase();
+  return COUNTRY_ALIASES[key] || c.trim();
+}
+
+// Normalize country field on all nodes once
+GRAPH_DATA.nodes.forEach(n=>{ if(n.country) n.country = normalizeCountry(n.country); });
+
+// Build first-author lookup: articleNum -> firstAuthor
+// Usar num (não título) evita: (1) trailing spaces no título, (2) títulos duplicados sobrescreverem entrada
+const FIRST_AUTHOR_MAP = new Map();
+ARTICLES_DATA.forEach(a => {
+  if(a.autores && a.autores.length > 0) FIRST_AUTHOR_MAP.set(a.num, a.autores[0]);
+});
 
 // Table state
 const TS={
@@ -125,9 +176,30 @@ function buildFilters(){
   // Set btn-direct active since directOnly starts true
   const btnD=document.getElementById('btn-direct');
   if(btnD) btnD.classList.add('on');
+  // Populate country select
+  const countrySelectEl = document.getElementById('country-select');
+  if(countrySelectEl){
+    const countryData = {};
+    GRAPH_DATA.nodes.forEach(n => {
+      const c = normalizeCountry(n.country||'Unknown');
+      if(c === 'Unknown' || c === 'Multiple') return;
+      if(!countryData[c]) countryData[c] = {articleNums: new Set()};
+      (n.articles||[]).forEach(a => countryData[c].articleNums.add(a.num ?? a.title));
+    });
+    const sorted = Object.entries(countryData).sort((a,b) => b[1].articleNums.size - a[1].articleNums.size);
+    countrySelectEl.innerHTML = '<option value="">— Todos os países —</option>' +
+      sorted.map(([k,v]) => `<option value="${k}">${k} (${v.articleNums.size})</option>`).join('');
+  }
   // Check URL hash on load
   const hash=window.location.hash.slice(1);
-  if(hash){const id=decodeURIComponent(hash.replace(/_/g,' '));const n=NODE_MAP.get(id);if(n)setTimeout(()=>openCard(n),1000);}
+  if(hash){
+    if(hash.startsWith('pais_')){
+      const cname=decodeURIComponent(hash.slice(5).replace(/_/g,' '));
+      setTimeout(()=>filterByCountry(cname),1000);
+    } else {
+      const id=decodeURIComponent(hash.replace(/_/g,' '));const n=NODE_MAP.get(id);if(n)setTimeout(()=>openCard(n),1000);
+    }
+  }
 }
 
 function toggleFilt(type,val){
@@ -180,6 +252,83 @@ function refreshView(){
   else renderTable(activeTab);
 }
 
+// ── Network live parameter update ──
+function updateNetParam(param, val){
+  const svgEl = document.getElementById('d3svg');
+  if(param==='nsize'){
+    netNodeSizeMult=val;
+    document.getElementById('v-nsize').textContent=val.toFixed(1)+'×';
+    if(gNodes){
+      gNodes.attr('r',d=>nodeR(d)*netNodeSizeMult);
+      if(svgEl?.__netSim){
+        svgEl.__netSim.force('collision',d3.forceCollide(d=>nodeR(d)*netNodeSizeMult+1.5));
+        svgEl.__netSim.alpha(0.2).restart();
+      }
+    }
+  } else if(param==='ldist'){
+    netLinkDist=val;
+    document.getElementById('v-ldist').textContent=val;
+    if(svgEl?.__netSim){
+      svgEl.__netSim.force('link').distance(val);
+      svgEl.__netSim.alpha(0.4).restart();
+    }
+  } else if(param==='charge'){
+    netCharge=val;
+    document.getElementById('v-charge').textContent=val;
+    if(svgEl?.__netSim){
+      svgEl.__netSim.force('charge',d3.forceManyBody().strength(-val));
+      svgEl.__netSim.alpha(0.4).restart();
+    }
+  } else if(param==='lwidth'){
+    netLinkWidth=val;
+    document.getElementById('v-lwidth').textContent=val.toFixed(1)+'×';
+    if(gLinks) gLinks.attr('stroke-width',d=>netLinkW(d));
+  } else if(param==='lcolor'){
+    netLinkColorMode = netLinkColorMode==='node' ? 'weight' : 'node';
+    const btn=document.getElementById('btn-lcolor');
+    if(btn) btn.textContent = netLinkColorMode==='node' ? '🎨 Link: Cor do nó' : '⚪ Link: Padrão';
+    if(gLinks){
+      gLinks.attr('stroke',d=>netLinkStroke(d)).attr('stroke-opacity',d=>netLinkOpacity(d));
+    }
+  }
+}
+
+function netFitView(){
+  const svgEl = document.getElementById('d3svg');
+  if(svgEl?.__netFit) svgEl.__netFit();
+}
+
+// Pan + flash-highlight a node in the network graph by id
+function focusNetNode(id){
+  const svgEl=document.getElementById('d3svg');
+  if(!svgEl||!gNodes) return;
+  const nodesCopy=svgEl.__netNodes;
+  const z=svgEl.__netZoom;
+  const netR=svgEl.__netR;
+  if(!nodesCopy||!z) return;
+  const nd=nodesCopy.find(n=>n.id===id);
+  if(!nd||nd.x==null) return;
+  const W=svgEl.clientWidth,H=svgEl.clientHeight;
+  const sc=2.8;
+  d3.select('#d3svg').transition().duration(650)
+    .call(z.transform,d3.zoomIdentity.translate(W/2-sc*nd.x,H/2-sc*nd.y).scale(sc));
+  // Flash ring around the node
+  gNodes.filter(d=>d.id===id)
+    .transition().duration(120).attr('r',d=>(netR||((x)=>x.count||1))(d)*3.5)
+      .attr('stroke','#ffdd44').attr('stroke-width',3.5)
+    .transition().duration(900).attr('r',d=>(netR||((x)=>x.count||1))(d)*2.2)
+      .attr('stroke','#5b9fff').attr('stroke-width',2);
+}
+
+// Search dropdown: open card + highlight node if on network tab
+function selectAuthor(id){
+  const n=NODE_MAP.get(id);
+  openCard(n);
+  if(activeTab==='net') setTimeout(()=>focusNetNode(id),60);
+  document.getElementById('srch-drop').style.display='none';
+  document.getElementById('srch-in').value='';
+}
+
 function switchTab(t){
   activeTab=t;
   if(t!=='globe') closeSidebarCard();
@@ -203,6 +352,9 @@ function switchTab(t){
   const ST={globe:'🌍 Mapa 2D · Clique para abrir card do participante',net:'🔗 Arraste nós · scroll zoom · clique para detalhes',regions:'🗺 Colaborações por região',themes:'🎯 Colaborações por tema',authors:'👤 Tabela de autores',articles:'📄 Tabela de artigos',edges:'🔗 Tabela source–target'};
   document.getElementById('status-txt').textContent=ST[t]||'';
   
+  const netCtrl=document.getElementById('net-ctrl-panel');
+  if(netCtrl) netCtrl.style.display=t==='net'?'flex':'none';
+
   if(t==='net')initD3Net();
   else if(t==='regions')initD3Bar('region');
   else if(t==='themes')initD3Bar('theme');
@@ -212,12 +364,12 @@ function switchTab(t){
 // ──────────────────────────────────────────────────────────────────
 //  PARTICIPANT CARD
 // ──────────────────────────────────────────────────────────────────
-function openCard(n){
+function openCard(n, initialPage){
   if(!n)return;
-  if(activeTab==='globe'){showSidebarCard(n);return;}
+  // Redirect to sidebar if on globe/map tab, unless a specific page was requested
+  if(activeTab==='globe' && !initialPage){showSidebarCard(n);return;}
   const slug=slugify(n.id);
   history.pushState(null,'','#'+slug);
-
 
   // Header
   document.getElementById('pc-name').textContent=n.id;
@@ -231,33 +383,42 @@ function openCard(n){
   // Stats
   const collabs=GRAPH_DATA.edges.filter(e=>e.source===n.id||e.target===n.id);
   const collabCount=new Set(collabs.map(e=>e.source===n.id?e.target:e.source)).size;
-  const totalWeight=collabs.reduce((s,e)=>s+e.weight,0);
+  const firstAuthorArts=(n.articles||[]).filter(a=>FIRST_AUTHOR_MAP.get(a.num)===n.id);
+  const collabArts=(n.articles||[]).filter(a=>FIRST_AUTHOR_MAP.get(a.num)!==n.id);
   document.getElementById('pc-stat').innerHTML=
-    `<div class="pcard-s"><div class="n">${n.count}</div><div class="l">Artigos</div></div>`+
-    `<div class="pcard-s"><div class="n">${collabCount}</div><div class="l">Coautores</div></div>`+
-    `<div class="pcard-s"><div class="n">${totalWeight}</div><div class="l">Total Colab.</div></div>`+
-    `<div class="pcard-s"><div class="n">${collabs.filter(e=>e.weight>=3).length}</div><div class="l">Fortes (3+)</div></div>`;
+    `<div class="pcard-s"><div class="n">${(n.articles||[]).length}</div><div class="l">Total</div></div>`+
+    `<div class="pcard-s" title="Como primeiro autor"><div class="n" style="color:#66ee88">${firstAuthorArts.length}</div><div class="l">1º Autor</div></div>`+
+    `<div class="pcard-s" title="Em colaboração"><div class="n" style="color:#5b9fff">${collabArts.length}</div><div class="l">Colab.</div></div>`+
+    `<div class="pcard-s"><div class="n">${collabCount}</div><div class="l">Coautores</div></div>`;
 
   const linkEl=document.getElementById('pc-link');
   linkEl.href='#'+slug;
   linkEl.textContent='🔗 #'+decodeURIComponent(slug);
 
-  // Info tab: articles + collaborators
-  const arts=(n.articles||[]).map(a=>{
+  // Article renderer for overlay card (loads PDF in right column)
+  function renderArtRow(a){
     const pg=a.page;
-    const pgStr=pg?`<span class="pcard-pg" onclick="event.stopPropagation();openPdfTab('${a.title.replace(/'/g,"\\'")}',${pg})" title="Abrir no PDF">p.${pg} ↗</span>`:'';
-    return `<div class="pcard-article">
+    const pgStr=pg?`<span class="pcard-pg" onclick="event.stopPropagation();loadPdfPage(${pg})" title="Abrir no PDF">p.${pg} ↗</span>`:'';
+    const numLabel=`<span style="font-size:.5rem;color:var(--dim);opacity:.6">#${a.num}</span>`;
+    return `<div class="pcard-article" onclick="if(${pg||0})loadPdfPage(${pg||0})">
       <div class="pcard-atitle pcard-atitle-full">${a.title}</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
-        <span class="pcard-atag">${a.design}</span>${pgStr}
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">
+        <span class="pcard-atag">${a.design}</span>${pgStr}${numLabel}
       </div>
     </div>`;
-  }).join('');
+  }
+
+  let bodyHtml='';
+  if(firstAuthorArts.length>0){
+    bodyHtml+=`<div class="pcard-sec" style="color:#66ee88">★ Primeiro Autor (${firstAuthorArts.length})</div>${firstAuthorArts.map(renderArtRow).join('')}`;
+  }
+  if(collabArts.length>0){
+    bodyHtml+=`<div class="pcard-sec" style="margin-top:${firstAuthorArts.length>0?'12':'0'}px;color:#5b9fff">⟳ Em Colaboração (${collabArts.length})</div>${collabArts.map(renderArtRow).join('')}`;
+  }
 
   const collabNodes=collabs.sort((a,b)=>b.weight-a.weight).slice(0,25).map(e=>{
     const oid=e.source===n.id?e.target:e.source;
     const on=NODE_MAP.get(oid)||{};
-    const rc=REGION_COL[on.region]||'#4e6280';
     return `<div class="pcard-collab">
       <div class="pcard-cname" onclick="openCard(NODE_MAP.get('${oid.replace(/'/g,"\\'")}'))">${oid}</div>
       ${on.country?`<span class="ctry pcard-cctry">${on.country}</span>`:''}
@@ -265,13 +426,12 @@ function openCard(n){
     </div>`;
   }).join('');
 
-  document.getElementById('pc-body').innerHTML=
-    `<div class="pcard-sec">Publicações (${(n.articles||[]).length})</div>${arts}`+
-    `<div class="pcard-sec" style="margin-top:14px">Colaboradores (${collabCount})</div>${collabNodes}`;
+  bodyHtml+=`<div class="pcard-sec" style="margin-top:14px">Colaboradores (${collabCount})</div>${collabNodes}`;
+  document.getElementById('pc-body').innerHTML=bodyHtml;
 
-  // Load first article's PDF page
-  const firstPage=(n.articles||[])[0]?.page;
-  if(firstPage) loadPdfPage(firstPage);
+  // Load the requested page, or first article's page
+  const pageToLoad=initialPage||(n.articles||[])[0]?.page;
+  if(pageToLoad) loadPdfPage(pageToLoad);
   else document.getElementById('pc-pdf-container').innerHTML='';
   const pcard=document.getElementById('pcard');
   pcard.style.transform='scale(0.92) translateY(20px)';
@@ -288,36 +448,49 @@ function openCard(n){
 
 function showSidebarCard(n){
   if(!n)return;
+
+  // Set URL hash for this author
+  const slug = slugify(n.id);
+  history.pushState(null,'','#'+slug);
+
   const regionColor=REGION_COL[n.region]||'#4e6280';
   const themeColor=THEME_COL[n.theme]||'#4e6280';
   document.getElementById('sc-name').textContent=n.id;
   document.getElementById('sc-meta').innerHTML=
     `<span class="pcard-tag" style="color:${regionColor};border-color:${regionColor}33;background:${regionColor}11">${n.region}</span>`+
     `<span class="pcard-tag" style="color:${themeColor};border-color:${themeColor}33;background:${themeColor}11">${n.theme}</span>`+
-    (n.country?`<span class="ctry">${n.country}</span>`:'');
-  
+    (n.country?`<span class="ctry">${n.country}</span>`:'')+
+    `<a href="#${slug}" style="font-size:.52rem;color:var(--dim);margin-left:6px;text-decoration:none;opacity:.6" title="Link direto para este participante">🔗 link</a>`;
+
   // Strict co-authors: only those who shared the SAME paper
   const samePaperCollabs = SAME_PAPER_EDGES.filter(e => e.source === n.id || e.target === n.id);
   const collabCount = samePaperCollabs.length;
-  const totalWeight = samePaperCollabs.reduce((s, e) => s + e.weight, 0);
+
+  // Separate first-author vs collaboration articles
+  const allArts = n.articles || [];
+  const firstAuthorArts = allArts.filter(a => FIRST_AUTHOR_MAP.get(a.num) === n.id);
+  const collabArts = allArts.filter(a => FIRST_AUTHOR_MAP.get(a.num) !== n.id);
 
   document.getElementById('sc-stat').innerHTML=
-    `<div class="pcard-s"><div class="n">${n.count}</div><div class="l">Artigos</div></div>`+
-    `<div class="pcard-s"><div class="n">${collabCount}</div><div class="l">Coautores</div></div>`+
-    `<div class="pcard-s"><div class="n">${totalWeight}</div><div class="l">Total Colab.</div></div>`+
-    `<div class="pcard-s"><div class="n">${samePaperCollabs.filter(e=>e.weight>=3).length}</div><div class="l">Fortes (3+)</div></div>`;
-  
-  const arts=(n.articles||[]).map(a=>{
-    const pg=a.page;
-    // Use openPdfPopup for 2D map sidebar
-    const pgStr=pg?`<span class="pcard-pg" onclick="event.stopPropagation();openPdfPopup('${a.title.replace(/'/g,"\\'")}',${pg})" title="Abrir no PDF">p.${pg} ↗</span>`:'';
-    return `<div class="pcard-article" onclick="openPdfPopup('${a.title.replace(/'/g,"\\'")}',${pg})">
-      <div class="pcard-atitle pcard-atitle-full">${a.title}</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-top:3px">
-        <span class="pcard-atag">${a.design}</span>${pgStr}
-      </div>
-    </div>`;
-  }).join('');
+    `<div class="pcard-s"><div class="n">${allArts.length}</div><div class="l">Total</div></div>`+
+    `<div class="pcard-s" title="Como primeiro autor"><div class="n" style="color:#66ee88">${firstAuthorArts.length}</div><div class="l">1º Autor</div></div>`+
+    `<div class="pcard-s" title="Em colaboração (não primeiro autor)"><div class="n" style="color:#5b9fff">${collabArts.length}</div><div class="l">Colab.</div></div>`+
+    `<div class="pcard-s"><div class="n">${collabCount}</div><div class="l">Coautores</div></div>`;
+
+  function renderArtList(arts){
+    return arts.map(a=>{
+      const pg=a.page;
+      const pgStr=pg?`<span class="pcard-pg" onclick="event.stopPropagation();openCard(NODE_MAP.get('${n.id.replace(/'/g,"\\'")}'),${pg})" title="Abrir no PDF">p.${pg} ↗</span>`:'';
+      const numLabel=`<span style="font-size:.5rem;color:var(--dim);opacity:.6">#${a.num}</span>`;
+      return `<div class="pcard-article" onclick="openCard(NODE_MAP.get('${n.id.replace(/'/g,"\\'")}')${pg?`,${pg}`:''})"
+        style="cursor:pointer">
+        <div class="pcard-atitle pcard-atitle-full">${a.title}</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">
+          <span class="pcard-atag">${a.design}</span>${pgStr}${numLabel}
+        </div>
+      </div>`;
+    }).join('');
+  }
 
   const collabNodes=samePaperCollabs.sort((a,b)=>b.weight-a.weight).slice(0,20).map(e=>{
     const oid=e.source===n.id?e.target:e.source;
@@ -329,11 +502,17 @@ function showSidebarCard(n){
     </div>`;
   }).join('');
 
-  const totalArts = (n.articles||[]).length;
-  const scrollHint = totalArts > 3 ? `<div style="font-size:.54rem;color:var(--dim);padding:3px 0 2px;opacity:.6;text-align:right">↕ role para ver todos</div>` : '';
-  document.getElementById('sc-body').innerHTML=
-    `<div class="pcard-sec">Publicações (${totalArts})</div>${scrollHint}${arts}`+
-    `<div class="pcard-sec" style="margin-top:14px">Colaboradores (${collabCount})</div>${collabNodes}`;
+  let bodyHtml = '';
+  if(firstAuthorArts.length > 0){
+    bodyHtml += `<div class="pcard-sec" style="color:#66ee88">★ Primeiro Autor (${firstAuthorArts.length})</div>${renderArtList(firstAuthorArts)}`;
+  }
+  if(collabArts.length > 0){
+    const scrollHint = collabArts.length > 3 ? `<div style="font-size:.54rem;color:var(--dim);padding:3px 0 2px;opacity:.6;text-align:right">↕ role para ver todos</div>` : '';
+    bodyHtml += `<div class="pcard-sec" style="margin-top:${firstAuthorArts.length>0?'12':'0'}px;color:#5b9fff">⟳ Em Colaboração (${collabArts.length})</div>${scrollHint}${renderArtList(collabArts)}`;
+  }
+  bodyHtml += `<div class="pcard-sec" style="margin-top:14px">Colaboradores (${collabCount})</div>${collabNodes}`;
+
+  document.getElementById('sc-body').innerHTML = bodyHtml;
   document.getElementById('sidebar-filters').style.display='none';
   document.getElementById('sidebar-card').style.display='flex';
 }
@@ -343,6 +522,63 @@ function closeSidebarCard(){
   document.getElementById('sidebar-filters').style.display='';
   closePdfPopup();
   history.pushState(null,'',window.location.pathname+window.location.search);
+  const sel=document.getElementById('country-select');if(sel)sel.value='';
+}
+
+// ── Country card helpers ──
+function buildCountryEntry(countryName){
+  const {nodes}=filteredData();
+  const entry={authors:[],articleNums:new Set(),firstAuthorArts:0,collabArts:0};
+  const normName=normalizeCountry(countryName);
+  nodes.forEach(n=>{
+    if(normalizeCountry(n.country||'Unknown')!==normName)return;
+    if(!entry.authors.includes(n.id))entry.authors.push(n.id);
+    (n.articles||[]).forEach(a=>{
+      entry.articleNums.add(a.num??a.title);
+      if(FIRST_AUTHOR_MAP.get(a.num)===n.id)entry.firstAuthorArts++;
+      else entry.collabArts++;
+    });
+  });
+  return entry;
+}
+
+function filterByCountry(countryName){
+  if(!countryName){
+    const sel=document.getElementById('country-select');if(sel)sel.value='';
+    closeSidebarCard();
+    return;
+  }
+  const sel=document.getElementById('country-select');if(sel)sel.value=countryName;
+  const slug='pais_'+slugify(countryName);
+  history.pushState(null,'','#'+slug);
+  if(activeTab==='globe'){showCountrySidebarCard(countryName,buildCountryEntry(countryName));}
+}
+
+function showCountrySidebarCard(countryName,entry){
+  if(!entry||entry.authors.length===0)return;
+  const artCount=entry.articleNums.size;
+  document.getElementById('sc-name').textContent=countryName;
+  document.getElementById('sc-meta').innerHTML=
+    `<span class="pcard-tag" style="color:#5b9fff;border-color:#5b9fff33;background:#5b9fff11">🗺 País</span>`+
+    `<a href="#pais_${slugify(countryName)}" style="font-size:.52rem;color:var(--dim);margin-left:6px;text-decoration:none;opacity:.6" title="Link direto">🔗 link</a>`;
+  document.getElementById('sc-stat').innerHTML=
+    `<div class="pcard-s"><div class="n">${entry.authors.length}</div><div class="l">Autores</div></div>`+
+    `<div class="pcard-s"><div class="n">${artCount}</div><div class="l">Artigos</div></div>`+
+    `<div class="pcard-s" title="Publicações como 1º autor"><div class="n" style="color:#66ee88">${entry.firstAuthorArts}</div><div class="l">1º Autor</div></div>`+
+    `<div class="pcard-s" title="Em colaboração"><div class="n" style="color:#5b9fff">${entry.collabArts}</div><div class="l">Colab.</div></div>`;
+  const authorList=entry.authors
+    .sort((a,b)=>(NODE_MAP.get(b)?.count||0)-(NODE_MAP.get(a)?.count||0))
+    .map(id=>{
+      const n=NODE_MAP.get(id)||{};
+      return `<div class="pcard-collab">
+        <div class="pcard-cname" onclick="openCard(NODE_MAP.get('${id.replace(/'/g,"\\'")}'))">${id}</div>
+        <span class="pcard-cw">${n.count||0} art.</span>
+      </div>`;
+    }).join('');
+  document.getElementById('sc-body').innerHTML=
+    `<div class="pcard-sec">Autores (${entry.authors.length})</div>${authorList}`;
+  document.getElementById('sidebar-filters').style.display='none';
+  document.getElementById('sidebar-card').style.display='flex';
 }
 
 function openPdfPopup(title, page) {
@@ -489,6 +725,26 @@ function checkHover(e){}
 // ──────────────────────────────────────────────────────────────────
 //  D3 NET
 // ──────────────────────────────────────────────────────────────────
+// ── Network link style helpers (used by initD3Net + updateNetParam) ──
+function _netLinkId(d){ return typeof d.source==='object'?d.source.id:d.source; }
+function netLinkStroke(d){
+  if(netLinkColorMode==='node'){
+    const sn=NODE_MAP.get(_netLinkId(d));
+    if(!sn) return '#5b9fff';
+    const col=d3.color(getColor(sn));
+    if(!col) return '#5b9fff';
+    col.opacity=d.weight>=3?.85:d.weight===2?.55:.22;
+    return col.toString();
+  }
+  return d.weight>=3?'#5b9fff':d.weight===2?'#3a6abf':'#1e3060';
+}
+function netLinkOpacity(d){
+  return netLinkColorMode==='node'?1:(d.weight>=3?.95:d.weight===2?.65:.32);
+}
+function netLinkW(d){
+  return (d.weight>=3?3.2:d.weight===2?1.8:0.9)*netLinkWidth;
+}
+
 function initD3Net(){
   const svg=d3.select('#d3svg');svg.selectAll('*').remove();
   const stage=document.getElementById('stage');
@@ -508,24 +764,29 @@ function initD3Net(){
     netAdj.get(t).set(s,e.weight||1);
   });
 
-  sim=d3.forceSimulation(nodesCopy)
-    .force('link',d3.forceLink(edgesCopy).id(d=>d.id).distance(60).strength(.4))
-    .force('charge',d3.forceManyBody().strength(-80))
-    .force('center',d3.forceCenter(W/2,H/2))
-    .force('collision',d3.forceCollide(d=>nodeR(d)+2));
-  const z=d3.zoom().scaleExtent([.1,8]).on('zoom',e=>g.attr('transform',e.transform));
+  const z=d3.zoom().scaleExtent([.05,12]).on('zoom',e=>g.attr('transform',e.transform));
   svg.call(z);
   const g=svg.append('g');
 
+  function netR(d){ return nodeR(d)*netNodeSizeMult; }
+
+  sim=d3.forceSimulation(nodesCopy)
+    .force('link',d3.forceLink(edgesCopy).id(d=>d.id).distance(netLinkDist).strength(0.55))
+    .force('charge',d3.forceManyBody().strength(-netCharge))
+    .force('center',d3.forceCenter(W/2,H/2))
+    .force('collision',d3.forceCollide(d=>netR(d)+1.5))
+    .force('gravX',d3.forceX(W/2).strength(0.025))
+    .force('gravY',d3.forceY(H/2).strength(0.025));
+
   gLinks=g.append('g').selectAll('line').data(edgesCopy).join('line')
-    .attr('stroke',d=>d.weight>=3?'#5b9fff':d.weight===2?'#3a6abf':'#1e3060')
-    .attr('stroke-opacity',d=>d.weight>=3?.95:d.weight===2?.65:.32)
-    .attr('stroke-width',d=>d.weight>=3?3.2:d.weight===2?1.8:0.9);
+    .attr('stroke',d=>netLinkStroke(d))
+    .attr('stroke-opacity',d=>netLinkOpacity(d))
+    .attr('stroke-width',d=>netLinkW(d));
 
   let selectedNetNode=null;
 
   gNodes=g.append('g').selectAll('circle').data(nodesCopy).join('circle')
-    .attr('r',d=>nodeR(d))
+    .attr('r',d=>netR(d))
     .attr('fill',d=>getColor(d))
     .attr('opacity',.92)
     .attr('stroke','#04080f')
@@ -538,14 +799,14 @@ function initD3Net(){
     .on('mouseover',(e,d)=>{
       showTip(e,d);
       if(d!==selectedNetNode){
-        d3.select(e.currentTarget).transition().duration(100).attr('r',nodeR(d)*1.6).attr('stroke','#5b9fff').attr('stroke-width',1.5);
+        d3.select(e.currentTarget).transition().duration(100).attr('r',netR(d)*1.6).attr('stroke','#5b9fff').attr('stroke-width',1.5);
       }
     })
     .on('mousemove',moveTip)
     .on('mouseout',(e,d)=>{
       hideTip();
       if(d!==selectedNetNode){
-        d3.select(e.currentTarget).transition().duration(160).attr('r',nodeR(d)).attr('stroke','#04080f').attr('stroke-width',.8);
+        d3.select(e.currentTarget).transition().duration(160).attr('r',netR(d)).attr('stroke','#04080f').attr('stroke-width',.8);
       }
     })
     .on('click',(e,d)=>{
@@ -555,18 +816,16 @@ function initD3Net(){
       const neighborIds=new Set(neighbors.keys());
       const allLinked=new Set([d.id,...neighborIds]);
 
-      // Highlight nodes
       gNodes.transition().duration(200)
         .attr('r',n=>{
-          if(n.id===d.id)return nodeR(n)*2.4;
-          if(neighborIds.has(n.id))return nodeR(n)*1.5;
-          return nodeR(n)*0.6;
+          if(n.id===d.id)return netR(n)*2.4;
+          if(neighborIds.has(n.id))return netR(n)*1.5;
+          return netR(n)*0.6;
         })
         .attr('opacity',n=>allLinked.has(n.id)?1:0.08)
         .attr('stroke',n=>n.id===d.id?'#5b9fff':neighborIds.has(n.id)?'#5b9fff88':'#04080f')
         .attr('stroke-width',n=>n.id===d.id?2.5:neighborIds.has(n.id)?1.2:.5);
 
-      // Highlight edges by weight category
       gLinks.transition().duration(200)
         .attr('stroke',ed=>{
           const s=typeof ed.source==='object'?ed.source.id:ed.source;
@@ -597,12 +856,45 @@ function initD3Net(){
   svg.on('click.netReset',()=>{
     selectedNetNode=null;
     gNodes.transition().duration(200)
-      .attr('r',d=>nodeR(d)).attr('opacity',.92).attr('stroke','#04080f').attr('stroke-width',.8);
+      .attr('r',d=>netR(d)).attr('opacity',.92).attr('stroke','#04080f').attr('stroke-width',.8);
     gLinks.transition().duration(200)
-      .attr('stroke',d=>d.weight>=3?'#5b9fff':d.weight===2?'#3a6abf':'#1e3060')
-      .attr('stroke-opacity',d=>d.weight>=3?.95:d.weight===2?.65:.32)
-      .attr('stroke-width',d=>d.weight>=3?3.2:d.weight===2?1.8:0.9);
+      .attr('stroke',d=>netLinkStroke(d))
+      .attr('stroke-opacity',d=>netLinkOpacity(d))
+      .attr('stroke-width',d=>netLinkW(d));
   });
+
+  // Auto fit-to-view once when simulation settles
+  let autoFitted=false;
+  sim.on('end',()=>{
+    if(autoFitted) return; autoFitted=true;
+    const xs=nodesCopy.map(n=>n.x||0), ys=nodesCopy.map(n=>n.y||0);
+    const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    const pad=60,dxR=x1-x0+pad*2,dyR=y1-y0+pad*2;
+    if(dxR>0&&dyR>0){
+      const sc=Math.min(W/dxR,H/dyR,1.2);
+      svg.transition().duration(700)
+        .call(z.transform,d3.zoomIdentity.translate(W/2-sc*(x0+x1)/2,H/2-sc*(y0+y1)/2).scale(sc));
+    }
+  });
+
+  // Expose zoom + nodes for focusNetNode()
+  svg.node().__netZoom=z;
+  svg.node().__netNodes=nodesCopy;
+
+  // Expose fit function for the Fit button
+  svg.node().__netFit=()=>{
+    const xs=nodesCopy.map(n=>n.x||0),ys=nodesCopy.map(n=>n.y||0);
+    const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    const pad=60,dxR=x1-x0+pad*2,dyR=y1-y0+pad*2;
+    if(dxR>0&&dyR>0){
+      const sc=Math.min(W/dxR,H/dyR,1.2);
+      svg.transition().duration(500)
+        .call(z.transform,d3.zoomIdentity.translate(W/2-sc*(x0+x1)/2,H/2-sc*(y0+y1)/2).scale(sc));
+    }
+  };
+  // Expose sim for live param updates
+  svg.node().__netSim=sim;
+  svg.node().__netR=netR;
 
   sim.on('tick',()=>{
     gLinks.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
@@ -732,7 +1024,7 @@ function doSearch(q){
   const drop=document.getElementById('srch-drop');
   if(!q){drop.style.display='none';return;}
   const res=GRAPH_DATA.nodes.filter(n=>n.id.toLowerCase().includes(q.toLowerCase())).slice(0,8);
-  drop.innerHTML=res.map(n=>`<div class="sdi" onclick="openCard(NODE_MAP.get('${n.id.replace(/'/g,"\\'")}'));document.getElementById('srch-drop').style.display='none';document.getElementById('srch-in').value=''">${n.id}<small>${n.country||n.region}</small></div>`).join('');
+  drop.innerHTML=res.map(n=>`<div class="sdi" onclick="selectAuthor('${n.id.replace(/'/g,"\\'")}')">  ${n.id}<small>${n.country||n.region}</small></div>`).join('');
   drop.style.display=res.length?'block':'none';
 }
 
@@ -902,14 +1194,20 @@ function buildMap2D(){
       const {nodes, edges} = filteredData();
       doneLoading();
 
-      // Group nodes by country name (from our data)
-      const countryAuthorMap = new Map(); // countryName -> {authors, articles}
+      // Group nodes by normalized country name
+      // articleNums: Set de IDs únicos de artigos (evita contar o mesmo artigo N vezes quando N autores do mesmo país co-escreveram)
+      const countryAuthorMap = new Map(); // countryName -> {authors, articleNums, firstAuthorArts, collabArts}
       nodes.forEach(n=>{
-        const c = n.country||'Unknown';
-        if(!countryAuthorMap.has(c)) countryAuthorMap.set(c, {authors:[], articles:0});
+        const c = normalizeCountry(n.country||'Unknown');
+        if(!countryAuthorMap.has(c)) countryAuthorMap.set(c, {authors:[], articleNums:new Set(), firstAuthorArts:0, collabArts:0});
         const entry = countryAuthorMap.get(c);
         if(!entry.authors.includes(n.id)) entry.authors.push(n.id);
-        entry.articles += (n.count||0);
+        // Count first-author vs collab; track unique article nums to avoid double-counting
+        (n.articles||[]).forEach(a => {
+          entry.articleNums.add(a.num ?? a.title);
+          if(FIRST_AUTHOR_MAP.get(a.num) === n.id) entry.firstAuthorArts++;
+          else entry.collabArts++;
+        });
       });
 
       // Map each node to its geographic anchor (projected lat/lon)
@@ -919,27 +1217,57 @@ function buildMap2D(){
         n._ay = p ? p[1] : H/2;
       });
 
+      // ── Country color scale (article count) ──
+      // Map feat.id → normalized country name for fast fill lookup
+      const featCountryName = new Map();
+      countries.features.forEach(feat => {
+        const name = ISO_NAMES[+feat.id];
+        if(name) featCountryName.set(+feat.id, normalizeCountry(name));
+      });
+      const maxCountryArt = Math.max(1, ...[...countryAuthorMap.values()].map(e => e.articleNums.size));
+      // Accent RGB channels for the color gradient
+      const accentRGB = theme==='light' ? [192,57,43] : theme==='warm' ? [232,160,64] : [91,159,255];
+      // Transparent fill for countries with no data (still captures mouse events)
+      const noDataFill = 'rgba(128,128,128,0.04)';
+
+      function getCountryFill(feat){
+        const cname = featCountryName.get(+feat.id);
+        if(!cname) return noDataFill;
+        const entry = countryAuthorMap.get(cname);
+        if(!entry || entry.articleNums.size === 0) return noDataFill;
+        // Power scale (exponent 0.35) compresses the high end so small countries
+        // are still clearly visible even next to USA (75 arts) or Canada (41 arts)
+        const t = Math.pow(entry.articleNums.size / maxCountryArt, 0.35);
+        const opacity = Math.round((0.15 + t * 0.75) * 100) / 100;
+        return `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},${opacity})`;
+      }
+
       // ── Country path layer ──
       // Track last hovered feature to avoid re-triggering same tooltip
       let lastHoveredId = null;
 
-      const countryPaths = mapG.append('g').selectAll('path.country-path')
+      mapG.append('g').selectAll('path.country-path')
         .data(countries.features).join('path')
         .attr('class','country-path')
         .attr('d', path)
-        .attr('fill', colors.land)
+        .attr('fill', d => getCountryFill(d))
         .attr('stroke', colors.border)
         .attr('stroke-width', .4)
+        .style('cursor', feat => countryAuthorMap.get(featCountryName.get(+feat.id))?.authors.length > 0 ? 'pointer' : 'default')
+        .on('click', function(_ev, feat){
+          const cname = featCountryName.get(+feat.id);
+          if(!cname) return;
+          const entry = countryAuthorMap.get(cname);
+          if(!entry || entry.authors.length === 0) return;
+          filterByCountry(cname);
+        })
         .on('mouseover', function(event, feat){
           if(feat.id === lastHoveredId) return;
           lastHoveredId = feat.id;
 
-          d3.select(this).attr('fill', colors.landHover);
-
-          // Get country name from ISO table, or fallback to nearest node's country
+          // Resolve country name: prefer ISO table, fallback to nearest node
           let countryName = ISO_NAMES[+feat.id];
           if(!countryName){
-            // Fallback: find nearest node anchor point
             const centroid = featCentroids.get(feat);
             if(centroid){
               let closestDist = Infinity;
@@ -952,15 +1280,31 @@ function buildMap2D(){
             }
           }
 
-          if(!countryName){
-            ctip.style.display='none';
-            return;
+          // Highlight fill: boost opacity + accent border when country has data
+          const normalizedName = countryName ? normalizeCountry(countryName) : null;
+          const entry = normalizedName ? countryAuthorMap.get(normalizedName) : null;
+          const hasData = entry && entry.articleNums.size > 0;
+          if(hasData){
+            const t = Math.pow(entry.articleNums.size / maxCountryArt, 0.35);
+            const opacity = Math.min(0.92, 0.15 + t*0.75 + 0.18);
+            d3.select(this)
+              .attr('fill', `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},${opacity})`)
+              .attr('stroke', `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.9)`)
+              .attr('stroke-width', 1.5);
+          } else {
+            d3.select(this).attr('fill', `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.08)`);
           }
 
-          const entry = countryAuthorMap.get(countryName);
-          let html = `<b>${countryName}</b>`;
+          if(!countryName){ ctip.style.display='none'; return; }
+
+          let html = `<b>${normalizedName}</b>`;
           if(entry && entry.authors.length > 0){
-            html += `<br>${entry.authors.length} autor${entry.authors.length>1?'es':''} · ${entry.articles} artigo${entry.articles>1?'s':''}`;
+            const artCount = entry.articleNums.size;
+            html += `<br>${entry.authors.length} autor${entry.authors.length>1?'es':''} · ${artCount} artigo${artCount>1?'s':''}`;
+            if(entry.firstAuthorArts > 0 || entry.collabArts > 0){
+              html += `<br><span style="color:#66ee88">★ ${entry.firstAuthorArts} 1º autor</span> · <span style="color:#5b9fff">⟳ ${entry.collabArts} colab.</span>`;
+            }
+            html += `<br><span style="color:var(--dim);font-size:.6em">Clique para ver autores →</span>`;
           }
           ctip.innerHTML = html;
           ctip.style.display = 'block';
@@ -969,9 +1313,12 @@ function buildMap2D(){
           ctip.style.left = (event.clientX+14)+'px';
           ctip.style.top  = (event.clientY-28)+'px';
         })
-        .on('mouseout', function(event){
+        .on('mouseout', function(_ev, feat){
           lastHoveredId = null;
-          d3.select(this).attr('fill', colors.land);
+          d3.select(this)
+            .attr('fill', getCountryFill(feat))
+            .attr('stroke', colors.border)
+            .attr('stroke-width', .4);
           ctip.style.display = 'none';
         });
 
