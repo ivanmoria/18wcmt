@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>Co-authorship Network Explorer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/mobile.css">
+
+</head>
+<body>
+<style>
+
+/* ============================================================
+   LANDING E-POSTER STYLES
+   ============================================================ */
+.landing-overlay {
+  position: fixed; inset: -4px; z-index: 9999;
+  overflow-y: auto; overflow-x: hidden;
+  background-image: url('assets/img/bg_hero_REV02.jpg');
+  background-color: #04080f;
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+  font-family: 'IBM Plex Mono', monospace;
+  scroll-behavior: smooth;
+  transition: opacity .7s ease, transform .7s ease;
+}
+.landing-overlay::before {
+  content: '';
+  position: fixed; inset: -4px;
+  background: rgba(4, 8, 15, 0.88);
+  z-index: 0; pointer-events: none;
+}
+.landing-overlay > * { position: relative; z-index: 1; }
+.landing-overlay.hide {
+  opacity: 0; transform: translateY(-24px); pointer-events: none;
+}
+
+/* ── LANG BAR ── */
+.lang-bar {
+  position: fixed; top: 12px; right: 14px; z-index: 10001;
+  display: flex; gap: 4px; flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.lang-btn {
+  background: rgba(4, 8, 15, 0.72);
+  border: 1px solid rgba(91, 159, 255, 0.22);
+  border-radius: 5px;
+  color: rgba(224, 232, 248, 0.55);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: .66rem; letter-spacing: .05em;
+  padding: 3px 7px; cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  display: flex; align-items: center; gap: 4px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.lang-btn:hover {
+  background: rgba(91, 159, 255, 0.18);
+  border-color: rgba(91, 159, 255, 0.5);
+  color: #e0e8f8;
+}
+.lang-btn.active {
+  background: rgba(91, 159, 255, 0.22);
+  border-color: rgba(91, 159, 255, 0.65);
+  color: #5b9fff;
+}
+
+/* ── HERO ── */
+.lhero {
+  min-height: 100svh;
+  position: relative;
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  padding: clamp(40px, 8vh, 80px) clamp(16px, 6vw, 80px);
+  text-align: center;
+}
+.lhero-bg {
+  position: absolute; inset: 0;
+  background-image: url('assets/img/bg_hero_REV02.jpg');
+  background-size: cover; background-position: center 55%;
+}
+.lhero-bg::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(4,8,15,.65) 0%,
+    rgba(4,8,15,.38) 30%,
+    rgba(4,8,15,.62) 68%,
+    rgba(4,8,15,.95) 100%
+  );
+}
+.lhero > * { position: relative; z-index: 1; }
+
+.paper-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(1.8rem, 5.5vw, 3.8rem);
+  line-height: 1.13; color: #e0e8f8;
+  max-width: 860px; margin: 0 auto clamp(14px, 2.5vh, 22px);
+}
+.paper-title .hl { color: #5b9fff; }
+
+.paper-type-tag {
+  font-size: clamp(.66rem, .96vw, .75rem);
+  letter-spacing: .18em;
+  color: rgba(224, 232, 248, .4);
+  text-transform: uppercase;
+  margin-bottom: clamp(12px, 2vh, 20px);
+}
+
+.hero-actions {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+
+/* lang bar in hero (landing) — duplicate for visibility */
+.hero-lang-bar {
+  display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: 18px;
+}
+.hero-lang-bar .lang-btn {
+  position: static; /* override fixed from .lang-bar */
+}
+
+.hero-enter-btn {
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: clamp(12px, 2vh, 16px) clamp(28px, 5vw, 48px);
+  background: rgba(91, 159, 255, .14);
+  color: #5b9fff;
+  border: 1px solid rgba(91, 159, 255, .55);
+  border-radius: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: clamp(.78rem, 1.4vw, .9rem);
+  letter-spacing: .08em; cursor: pointer;
+  transition: all .2s; backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.hero-enter-btn:hover {
+  background: rgba(91, 159, 255, .25);
+  border-color: #5b9fff;
+  transform: translateY(-2px);
+}
+.hero-enter-btn .arrow {
+  transition: transform .2s; font-style: normal;
+}
+.hero-enter-btn:hover .arrow { transform: translateX(4px); }
+@keyframes sfade { 0%{opacity:0} 20%{opacity:1} 80%{opacity:1} 100%{opacity:.55} }
+@keyframes sglow {
+  0%,100% { text-shadow: 0 0 8px rgba(91,159,255,.3), 0 0 18px rgba(91,159,255,.1); color: rgba(91,159,255,.55); }
+  50%      { text-shadow: 0 0 14px rgba(91,159,255,.95), 0 0 30px rgba(91,159,255,.5), 0 0 50px rgba(91,159,255,.2); color: rgba(91,159,255,1); }
+}
+@keyframes sbounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+
+/* ── DESKTOP HERO COMPACT ── */
+@media (min-width: 900px) {
+  .lhero { padding-top: clamp(24px, 4vh, 48px); padding-bottom: clamp(24px, 4vh, 48px); }
+  .paper-title { font-size: clamp(1.8rem, 3.8vw, 2.6rem); margin-bottom: clamp(10px, 1.8vh, 16px); }
+}
+.cta-main-btn .arrow {
+  font-size: 1.2em; transition: transform .2s; font-style: normal;
+}
+.cta-main-btn:hover .arrow { transform: translateX(5px); }</style>
+<!-- ============================================================
+     WELCOME — single entry screen
+     ============================================================ -->
+<div class="landing-overlay" id="landing">
+
+  <section class="lhero">
+    <div class="lhero-bg"></div>
+
+    <h1 class="paper-title">
+      Interactive <span class="hl">Co-authorship</span><br>Network Explorer
+    </h1>
+    <div class="paper-type-tag">458 authors &middot; 238 articles &middot; 983 connections &middot; Proceedings of the 17th World Congress of Music Therapy</div>
+
+    <!-- Language selector -->
+    <div class="hero-lang-inline">
+      <button class="lang-btn active" data-lang="en" onclick="setLang('en');updateLangToggle('en')" title="English">&#127468;&#127463; EN</button>
+      <button class="lang-btn" data-lang="pt" onclick="setLang('pt');updateLangToggle('pt')" title="Portugues">&#127463;&#127479; PT</button>
+      <button class="lang-btn" data-lang="it" onclick="setLang('it');updateLangToggle('it')" title="Italiano">&#127470;&#127481; IT</button>
+      <button class="lang-btn" data-lang="de" onclick="setLang('de');updateLangToggle('de')" title="Deutsch">&#127465;&#127466; DE</button>
+      <button class="lang-btn" data-lang="es" onclick="setLang('es');updateLangToggle('es')" title="Espanol">&#127466;&#127480; ES</button>
+      <button class="lang-btn" data-lang="ja" onclick="setLang('ja');updateLangToggle('ja')" title="Japanese">&#127471;&#127477; JA</button>
+      <button class="lang-btn" data-lang="fr" onclick="setLang('fr');updateLangToggle('fr')" title="Francais">&#127467;&#127479; FR</button>
+    </div>
+
+    <!-- Theme selector -->
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:clamp(16px,2.5vh,24px)">
+      <button onclick="setTheme('dark')" id="landing-theme-dark"
+        style="padding:5px 14px;border-radius:20px;border:1px solid rgba(91,159,255,.4);background:rgba(4,8,15,.6);color:#c0d0e8;font-size:.76rem;cursor:pointer;backdrop-filter:blur(6px);transition:border-color .15s">&#127769; Dark</button>
+      <button onclick="setTheme('light')" id="landing-theme-light"
+        style="padding:5px 14px;border-radius:20px;border:1px solid rgba(192,57,43,.4);background:rgba(4,8,15,.6);color:#c0d0e8;font-size:.76rem;cursor:pointer;backdrop-filter:blur(6px);transition:border-color .15s">&#9728;&#65039; Light</button>
+      <button onclick="setTheme('warm')" id="landing-theme-warm"
+        style="padding:5px 14px;border-radius:20px;border:1px solid rgba(232,160,64,.4);background:rgba(4,8,15,.6);color:#c0d0e8;font-size:.76rem;cursor:pointer;backdrop-filter:blur(6px);transition:border-color .15s">&#128992; Warm</button>
+    </div>
+
+    <div class="hero-actions">
+      <button class="hero-enter-btn" onclick="enterApp()">
+        <span data-i18n="enter_btn">Enter Interactive Visualization</span> <span class="arrow">&#8594;</span>
+      </button>
+    </div>
+
+    <!-- Contact -->
+    <div style="margin-top:clamp(22px,4vh,38px);font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.06em;color:rgba(224,232,248,.42);display:flex;flex-direction:column;gap:4px;align-items:center">
+      <span>Ivan Mori&aacute;</span>
+      <a href="mailto:ivanmoriabr@gmail.com" style="color:rgba(91,159,255,.75);text-decoration:none">ivanmoriabr@gmail.com</a>
+    </div>
+  </section>
+
+</div><!-- /landing -->
+
+<!-- ============================================================
+     SIDEBAR BACKDROP (mobile)
+     ============================================================ -->
+<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+<button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarOrToc()" title="Filtros">☰</button>
+
+<!-- ============================================================
+     MAIN APP
+     ============================================================ -->
+<div class="shell">
+<div class="topbar" style="position:relative">
+  <div class="topbar-bg"></div>
+  <!-- Title -->
+  <div class="logo" onclick="showLanding()" style="cursor:pointer;flex-shrink:0;color:var(--dim);line-height:1.15;white-space:normal">
+    <span>Co-authorship <em>Network</em></span><br>
+    <span style="font-size:.7em;letter-spacing:.04em;font-weight:600;opacity:.7">Explorer</span>
+  </div>
+
+  <!-- Hamburger (mobile only) -->
+  <button class="hamburger" id="hamburger" onclick="toggleNav()" aria-label="Menu">☰</button>
+
+  <!-- Collapsible nav (desktop: always shown via display:contents; mobile: toggled) -->
+  <div class="topbar-nav" id="topbar-nav">
+    <div class="tab-row">
+      <button class="tab on" id="tab-globe" onclick="switchTab('globe')" data-i18n="tab_map">🌍 Map</button>
+      <button class="tab" id="tab-net" onclick="switchTab('net')" data-i18n="tab_net">🔗 Network</button>
+      <button class="tab" id="tab-regions" onclick="switchTab('regions')" data-i18n="tab_reg">🗺 Regions</button>
+      <button class="tab" id="tab-themes" onclick="switchTab('themes')" data-i18n="tab_thm">🎯 Themes</button>
+      <button class="tab" id="tab-authors" onclick="switchTab('authors')" data-i18n="tab_aut">👤 Authors</button>
+      <button class="tab" id="tab-articles" onclick="switchTab('articles')" data-i18n="tab_art">📄 Articles</button>
+      <button class="tab" id="tab-edges" onclick="switchTab('edges')" data-i18n="tab_edg">🔗 Relations</button>
+    </div>
+    <div class="nav-controls">
+      <div class="top-stats">
+        <div class="spill"><b id="s-nodes">458</b> <span data-i18n="lbl_authors">authors</span></div>
+        <div class="spill"><b id="s-edges">983</b> <span data-i18n="lbl_collab">collab.</span></div>
+        <div class="spill"><b>238</b> <span data-i18n="lbl_articles">articles</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+        <button class="top-btn" onclick="showLanding()" title="Home" style="padding:5px 10px;font-size:.75rem;color:var(--acc);border-color:var(--acc)">&#8592; Home</button>
+        <button class="top-btn" onclick="location.reload()" style="padding:5px 10px;font-size:.75rem" data-i18n="reset_btn">⌖ Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Language + Theme (desktop: stacked column; mobile: side by side row) -->
+  <div class="theme-lang-group" style="flex-shrink:0;z-index:1;display:flex;flex-direction:column;gap:3px;align-items:stretch">
+    <button class="top-btn theme-cycle-desktop" id="theme-cycle-btn" onclick="cycleTheme()" title="Toggle theme" style="font-size:1.1rem;padding:5px 10px">🌙</button>
+    <button class="lang-toggle-btn" id="lang-toggle-btn" onclick="openLangPopup()" title="Language / Idioma"><span class="ltb-flag">🇬🇧</span></button>
+  </div>
+</div>
+
+<div class="workspace">
+  <div class="sidebar" id="sidebar">
+      <div id="sidebar-filters">
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_search">Search author</div>
+      <div class="srch" id="srch-wrap">
+        <span class="srch-ico">⌕</span>
+        <input id="srch-in" type="text" data-i18n-ph="search_ph" placeholder="Name..." oninput="doSearch(this.value)" autocomplete="off">
+        <div class="srch-drop" id="srch-drop"></div>
+      </div>
+    </div>
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_country">Select Country</div>
+      <select id="country-select" onchange="filterByCountry(this.value)"
+        style="width:100%;background:var(--inset);color:var(--txt);border:1px solid var(--mute);border-radius:5px;padding:5px 8px;font-size:.76rem;font-family:inherit;cursor:pointer">
+        <option value="">— Todos os países —</option>
+      </select>
+    </div>
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_partnerships">Partnerships</div>
+      <button class="cpill" id="btn-direct" onclick="toggleDirectOnly()" style="width:100%;justify-content:center" data-i18n="btn_same_paper">Same paper only</button>
+    </div>
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_filters">Filters</div>
+      <div class="sl-row"><span class="sl-lbl" data-i18n="lbl_min_collab">Min. collaborations</span><span class="sl-val" id="v-me">1</span></div>
+      <input type="range" min="1" max="3" value="1" id="sl-me" oninput="onFilt()">
+      <div class="sl-row" style="margin-top:6px"><span class="sl-lbl" data-i18n="lbl_min_articles">Min. author articles</span><span class="sl-val" id="v-mn">1</span></div>
+      <input type="range" min="1" max="9" value="1" id="sl-mn" oninput="onFilt()">
+    </div>
+    <div class="sblk">
+      <div class="slbl" data-i18n="s_color_by">Color nodes by</div>
+      <div class="cpills">
+        <button class="cpill on" id="cp-region" onclick="setColor('region')" data-i18n="color_region">Region</button>
+        <button class="cpill" id="cp-theme" onclick="setColor('theme')" data-i18n="color_theme">Theme</button>
+        <button class="cpill" id="cp-count" onclick="setColor('count')" data-i18n="color_volume">Volume</button>
+      </div>
+    </div>
+    <div class="sblk" id="sec-region">
+      <div class="slbl" data-i18n="s_regions">Regions</div>
+      <div class="chip-grid" id="region-chips"></div>
+    </div>
+    <div class="sblk" id="sec-theme" style="display:none">
+      <div class="slbl" data-i18n="s_themes">Themes</div>
+      <div class="chip-grid" id="theme-chips"></div>
+    </div>
+    <div class="legend-area">
+      <div class="slbl" data-i18n="s_legend">Legend</div>
+      <div id="leg-items"></div>
+      <div style="margin-top:10px">
+        <div class="slbl" data-i18n="legend_size">Size = no. of articles</div>
+        <div class="leg-row"><div class="leg-dot" style="width:5px;height:5px;background:var(--dim)"></div><span class="leg-lbl" data-i18n="legend_1">1 article</span></div>
+        <div class="leg-row"><div class="leg-dot" style="width:9px;height:9px;background:var(--dim)"></div><span class="leg-lbl" data-i18n="legend_5">5 articles</span></div>
+        <div class="leg-row"><div class="leg-dot" style="width:13px;height:13px;background:var(--dim)"></div><span class="leg-lbl" data-i18n="legend_9">9+ articles</span></div>
+      </div>
+      </div>
+    </div>
+    <div id="sidebar-card" style="display:none">
+    <div class="sc-topbar">
+      <button class="sc-back" onclick="closeSidebarCard()" data-i18n="back_filters">← Back</button>
+    </div>
+    <div class="sc-header">
+      <div class="sc-name" id="sc-name"></div>
+      <div class="sc-meta" id="sc-meta"></div>
+      <div class="sc-stat" id="sc-stat"></div>
+    </div>
+    <div class="sc-body" id="sc-body"></div>
+  </div>
+
+  </div>
+  <div class="stage" id="stage">
+    <div class="loading" id="loading">
+      <div class="spin"></div>
+      <div class="load-txt" id="load-msg" data-i18n="load_msg">Loading map…</div>
+    </div>
+    <canvas id="globe-canvas"></canvas>
+    <div class="d3-wrap" id="d3-wrap"><svg id="d3svg"></svg></div>
+    <!-- Network controls overlay (shown only on net tab) -->
+    <div id="net-ctrl-panel" style="display:none;position:absolute;bottom:18px;right:18px;z-index:80;
+      flex-direction:column;gap:0;background:rgba(4,8,15,.88);backdrop-filter:blur(8px);
+      border:1px solid rgba(91,159,255,.25);border-radius:8px;padding:8px 10px;min-width:185px;
+      font-family:'IBM Plex Mono',monospace;font-size:.74rem;color:#c0d0e8;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:.72rem;color:#5b9fff;letter-spacing:.04em;opacity:.8">NETWORK CONTROLS</span>
+        <button id="nbtn-minimize" onclick="toggleNetCtrl()" title="Minimizar"
+          style="background:none;border:none;color:#5b9fff;cursor:pointer;font-size:.95rem;padding:0 2px;line-height:1">−</button>
+      </div>
+      <div id="net-ctrl-inner" style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Node size</span>
+          <input type="range" min="0.5" max="5" step="0.1" value="2" id="sl-nsize"
+            oninput="updateNetParam('nsize',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="v-nsize" style="width:28px;text-align:right;color:#5b9fff">2.0×</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Distance</span>
+          <input type="range" min="8" max="140" step="4" value="30" id="sl-ldist"
+            oninput="updateNetParam('ldist',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="v-ldist" style="width:28px;text-align:right;color:#5b9fff">30</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Repulsion</span>
+          <input type="range" min="5" max="200" step="5" value="45" id="sl-charge"
+            oninput="updateNetParam('charge',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="v-charge" style="width:28px;text-align:right;color:#5b9fff">45</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7">Link width</span>
+          <input type="range" min="0.3" max="4" step="0.1" value="1" id="sl-lwidth"
+            oninput="updateNetParam('lwidth',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="v-lwidth" style="width:28px;text-align:right;color:#5b9fff">1.0×</span>
+        </div>
+        <button id="btn-lcolor" onclick="updateNetParam('lcolor',null)"
+          style="padding:4px 0;background:rgba(91,159,255,.10);border:1px solid rgba(91,159,255,.25);
+            border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.72rem;letter-spacing:.03em">
+          ⚪ Link: Padrão
+        </button>
+        <button onclick="netFitView()"
+          style="padding:4px 0;background:rgba(91,159,255,.15);border:1px solid rgba(91,159,255,.35);
+            border-radius:5px;color:#5b9fff;cursor:pointer;font-family:inherit;font-size:.72rem;letter-spacing:.03em">
+          ⊕ Fit to view
+        </button>
+        <button onclick="exportView('net')"
+          style="padding:4px 0;background:rgba(91,159,255,.08);border:1px solid rgba(91,159,255,.2);
+            border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.72rem;letter-spacing:.03em">
+          ↓ Exportar SVG
+        </button>
+      </div>
+    </div>
+    <!-- 2D Map controls overlay (shown only on globe tab) -->
+    <div id="map-ctrl-panel" style="display:flex;position:absolute;bottom:18px;right:18px;z-index:80;
+      flex-direction:column;gap:0;background:rgba(4,8,15,.88);backdrop-filter:blur(8px);
+      border:1px solid rgba(91,159,255,.25);border-radius:8px;padding:8px 10px;min-width:185px;
+      font-family:'IBM Plex Mono',monospace;font-size:.74rem;color:#c0d0e8;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:.72rem;color:#5b9fff;letter-spacing:.04em;opacity:.8" data-i18n="mc_title">MAP CONTROLS</span>
+        <button id="mbtn-minimize" onclick="toggleMapCtrl()" title="Minimizar"
+          style="background:none;border:none;color:#5b9fff;cursor:pointer;font-size:.95rem;padding:0 2px;line-height:1">−</button>
+      </div>
+      <div id="map-ctrl-inner" style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7" data-i18n="mc_nsize">Node size</span>
+          <input type="range" min="0" max="3" step="0.1" value="0" id="sl-mnsize"
+            oninput="updateMapParam('nsize',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="mv-nsize" style="width:28px;text-align:right;color:#5b9fff">0.0×</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7" data-i18n="mc_fill">Fill</span>
+          <input type="range" min="0.1" max="2" step="0.05" value="1" id="sl-mfill"
+            oninput="updateMapParam('fill',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="mv-fill" style="width:28px;text-align:right;color:#5b9fff">100%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7" data-i18n="mc_collide">Spread</span>
+          <input type="range" min="0" max="20" step="0.5" value="0" id="sl-mcollide"
+            oninput="updateMapParam('collide',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="mv-collide" style="width:28px;text-align:right;color:#5b9fff">0</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:66px;opacity:.7" data-i18n="mc_anchor">Anchor</span>
+          <input type="range" min="0" max="1" step="0.01" value="0" id="sl-manchor"
+            oninput="updateMapParam('anchor',+this.value)"
+            style="flex:1;accent-color:#5b9fff;cursor:pointer">
+          <span id="mv-anchor" style="width:28px;text-align:right;color:#5b9fff">0.00</span>
+        </div>
+        <button id="mbtn-nodes" onclick="updateMapParam('nodes',!mapShowNodes)"
+          style="padding:4px 0;background:rgba(91,159,255,.10);border:1px solid rgba(91,159,255,.25);
+            border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.72rem;letter-spacing:.03em">
+        </button>
+        <button onclick="exportView('map')" data-i18n="mc_export"
+          style="padding:4px 0;background:rgba(91,159,255,.08);border:1px solid rgba(91,159,255,.2);
+            border-radius:5px;color:#8ab4d8;cursor:pointer;font-family:inherit;font-size:.72rem;letter-spacing:.03em">
+          ↓ Export SVG
+        </button>
+      </div>
+    </div>
+    <div id="map2d-wrap" class="active"><svg id="map2d-svg"></svg></div>
+    <!-- Tables -->
+    <div class="tbl-wrap" id="tbl-authors">
+      <div class="tbl-search">
+        <input id="srch-authors" type="text" data-i18n-ph="ph_authors" placeholder="🔍 Filter authors..." oninput="filterTable('authors')">
+        <span class="tbl-cnt" id="cnt-authors"></span>
+      </div>
+      <div class="tbl-container"><table><thead><tr>
+        <th onclick="sortTable('authors','id',this)" data-i18n="col_author">Author</th>
+        <th onclick="sortTable('authors','country',this)" data-i18n="col_country">Country</th>
+        <th onclick="sortTable('authors','region',this)" data-i18n="col_region">Region</th>
+        <th onclick="sortTable('authors','theme',this)" data-i18n="col_theme">Theme</th>
+        <th onclick="sortTable('authors','count',this)" data-i18n="col_art">Art.</th>
+      </tr></thead><tbody id="tbody-authors"></tbody></table></div>
+    </div>
+    <div class="tbl-wrap" id="tbl-articles">
+      <div class="tbl-search">
+        <input id="srch-articles" type="text" data-i18n-ph="ph_articles" placeholder="🔍 Filter articles..." oninput="filterTable('articles')">
+        <span class="tbl-cnt" id="cnt-articles"></span>
+      </div>
+      <div class="tbl-container"><table><thead><tr>
+        <th onclick="sortTable('articles','num',this)" data-i18n="col_num">#</th>
+        <th onclick="sortTable('articles','titulo',this)" data-i18n="col_title">Title</th>
+        <th onclick="sortTable('articles','tema',this)" data-i18n="col_theme">Theme</th>
+        <th onclick="sortTable('articles','design',this)" data-i18n="col_design">Design</th>
+        <th onclick="sortTable('articles','pais',this)" data-i18n="col_country">Country</th>
+        <th onclick="sortTable('articles','num_autores',this)" data-i18n="col_auth">Auth.</th>
+        <th onclick="sortTable('articles','num_refs',this)" data-i18n="col_ref">Ref.</th>
+      </tr></thead><tbody id="tbody-articles"></tbody></table></div>
+    </div>
+    <div class="tbl-wrap" id="tbl-edges">
+      <div class="tbl-search">
+        <input id="srch-edges" type="text" data-i18n-ph="ph_edges" placeholder="🔍 Filter relations..." oninput="filterTable('edges')">
+        <span class="tbl-cnt" id="cnt-edges"></span>
+      </div>
+      <div class="tbl-container"><table><thead><tr>
+        <th onclick="sortTable('edges','source',this)" data-i18n="col_source">Source (Author A)</th>
+        <th onclick="sortTable('edges','source_country',this)" data-i18n="col_ctry_a">Country A</th>
+        <th onclick="sortTable('edges','target',this)" data-i18n="col_target">Target (Author B)</th>
+        <th onclick="sortTable('edges','target_country',this)" data-i18n="col_ctry_b">Country B</th>
+        <th onclick="sortTable('edges','weight',this)" data-i18n="col_weight">Weight</th>
+      </tr></thead><tbody id="tbody-edges"></tbody></table></div>
+    </div>
+    <div class="tip" id="tip"></div>
+    <div class="status" id="status-txt" data-i18n="status_map">🌍 2D Map · Click a point to open participant card</div>
+  </div>
+  </div>
+</div>
+
+<!-- FLOATING PDF POPUP (2D MAP) -->
+<div class="pdf-popup" id="pdf-popup">
+  <div class="pdf-popup-header">
+    <div class="pdf-popup-title" id="pdf-popup-title">PDF View</div>
+    <button class="pdf-popup-close" onclick="closePdfPopup()">✕</button>
+  </div>
+  <div class="pdf-popup-body">
+    <div id="pdf-popup-container"></div>
+  </div>
+</div>
+
+<!-- LANGUAGE POPUP -->
+<div id="lang-popup-overlay" onclick="closeLangPopup()" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div onclick="event.stopPropagation()" style="background:var(--surf2);border:1px solid var(--bord);border-radius:14px;padding:28px 32px;min-width:260px;box-shadow:0 16px 48px rgba(0,0,0,.7);display:flex;flex-direction:column;gap:10px;align-items:stretch;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.1em;color:var(--dim);text-align:center;margin-bottom:6px;" data-i18n="lang_title">LANGUAGE / IDIOMA</div>
+    <button class="lang-btn active" data-lang="en" onclick="setLang('en');updateLangToggle('en');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.88rem;border-radius:8px">🇬🇧 English</button>
+    <button class="lang-btn" data-lang="pt" onclick="setLang('pt');updateLangToggle('pt');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.88rem;border-radius:8px">🇧🇷 Português</button>
+    <button class="lang-btn" data-lang="it" onclick="setLang('it');updateLangToggle('it');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.88rem;border-radius:8px">🇮🇹 Italiano</button>
+    <button class="lang-btn" data-lang="de" onclick="setLang('de');updateLangToggle('de');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.88rem;border-radius:8px">🇩🇪 Deutsch</button>
+    <button class="lang-btn" data-lang="es" onclick="setLang('es');updateLangToggle('es');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.88rem;border-radius:8px">🇪🇸 Español</button>
+    <button class="lang-btn" data-lang="ja" onclick="setLang('ja');updateLangToggle('ja');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.88rem;border-radius:8px">🇯🇵 日本語</button>
+    <button class="lang-btn" data-lang="fr" onclick="setLang('fr');updateLangToggle('fr');closeLangPopup()" style="justify-content:flex-start;padding:8px 14px;font-size:.88rem;border-radius:8px">🇫🇷 Français</button>
+    <button onclick="closeLangPopup()" style="margin-top:6px;padding:6px;background:transparent;border:1px solid var(--bord);border-radius:8px;color:var(--dim);cursor:pointer;font-size:.62rem;font-family:inherit" data-i18n="lang_close">✕ Close</button>
+  </div>
+</div>
+
+<!-- PARTICIPANT CARD MODAL -->
+<div class="card-overlay" id="card-overlay" onclick="handleOverlayClick(event)">
+  <div class="pcard" id="pcard">
+    <button class="pcard-close" onclick="closeCard()" title="Close (Esc)">✕</button>
+    <!-- Mobile-only view toggle strip -->
+    <div class="pcard-view-toggle" id="pcard-view-toggle">
+      <button class="pcard-vtab on" id="pvt-info" onclick="pcardShowView('info')">👤 Info</button>
+      <button class="pcard-vtab" id="pvt-pdf" onclick="pcardShowView('pdf')">📄 PDF</button>
+      <button class="pcard-vtab-close" onclick="closeCard()" aria-label="Close">✕</button>
+    </div>
+    <div class="pcard-left-col">
+      <div class="pcard-header">
+        <div class="pcard-name" id="pc-name">—</div>
+        <div class="pcard-meta" id="pc-meta"></div>
+        <div class="pcard-stat" id="pc-stat"></div>
+        <a class="pcard-hashlink" id="pc-link" href="#">#</a>
+      </div>
+      <div class="pcard-body" id="pc-body"></div>
+    </div>
+    <div class="pcard-right-col">
+      <div id="pc-pdf-container"></div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/translations.js"></script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/main.js"></script>
+<script>
+/* ── LANDING LOGIC ── */
+function enterApp(){
+  const el = document.getElementById('landing');
+  el.classList.add('hide');
+  setTimeout(()=>{ el.style.display='none'; }, 700);
+  try { history.replaceState(null,'', location.href.replace(/#.*$/,'')+'#tab-globe'); } catch(e){}
+}
+
+function showLanding(){
+  const el = document.getElementById('landing');
+  el.style.display='block';
+  requestAnimationFrame(()=>{
+    el.classList.remove('hide');
+    el.scrollTop = 0;
+  });
+  try { history.replaceState(null,'', location.href.replace(/#.*$/,'')+'#home'); } catch(e){}
+}
+
+/* ── HAMBURGER NAV ── */
+function toggleNav(){
+  const nav = document.getElementById('topbar-nav');
+  const ham = document.getElementById('hamburger');
+  const isOpen = nav.classList.toggle('open');
+  ham.textContent = isOpen ? '✕' : '☰';
+}
+
+function closeNav(){
+  const nav = document.getElementById('topbar-nav');
+  const ham = document.getElementById('hamburger');
+  nav.classList.remove('open');
+  ham.textContent = '☰';
+}
+
+/* ── LANGUAGE TOGGLE (topbar) ── */
+const LANG_FLAGS = {en:'🇬🇧',pt:'🇧🇷',it:'🇮🇹',de:'🇩🇪',es:'🇪🇸',ja:'🇯🇵',fr:'🇫🇷'};
+
+function updateLangToggle(lang){
+  const btn = document.getElementById('lang-toggle-btn');
+  if(btn) btn.innerHTML = '<span class="ltb-flag">'+(LANG_FLAGS[lang]||'🌐')+'</span>';
+  // sync all lang-btn active states everywhere
+  document.querySelectorAll('.lang-btn').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-lang')===lang);
+  });
+}
+
+function openLangPopup(){
+  const p=document.getElementById('lang-popup-overlay');
+  if(p){ p.style.display='flex'; }
+}
+
+function closeLangPopup(){
+  const p=document.getElementById('lang-popup-overlay');
+  if(p){ p.style.display='none'; }
+}
+
+// Esc closes lang popup
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeLangPopup();
+});
+
+// legacy stubs (kept for any residual calls)
+function toggleLangDropdown(){ openLangPopup(); }
+function closeLangDropdown(){ closeLangPopup(); }
+
+/* ── MOBILE SIDEBAR LOGIC ── */
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sidebar-backdrop');
+  const isOpen = sb.classList.toggle('open');
+  bd.classList.toggle('show', isOpen);
+}
+
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-backdrop').classList.remove('show');
+}
+
+/* Close sidebar on tab switch (mobile) */
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Set #poster hash on first load when no hash is present
+  if (!location.hash) {
+    try { history.replaceState(null,'', location.href+'#home'); } catch(e){}
+  }
+  // Direct tab click → update URL hash (reliable, independent of switchTab wrapper chain)
+  document.querySelectorAll('.tab[id^="tab-"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.id.slice(4);
+      try { history.replaceState(null,'', location.href.replace(/#.*$/,'')+'#tab-'+tabId); } catch(e){}
+    });
+  });
+  if(typeof switchTab === 'function'){
+    const orig = switchTab;
+    window.switchTab = function(t){
+      orig(t);
+      if(window.innerWidth < 680) closeSidebar();
+    };
+  }
+  initLang();
+  // Sync toggle button with initial lang
+  try { updateLangToggle(localStorage.getItem('wcmt_lang')||'en'); } catch(e){}
+  // Close nav when tab is switched on mobile
+  if(typeof switchTab === 'function'){
+    const _orig = switchTab;
+    window.switchTab = function(t){
+      _orig(t);
+      if(window.innerWidth <= 900) closeNav();
+      if(window.innerWidth < 680) closeSidebar();
+    };
+  }
+});
+</script>
+<script src="assets/js/mobile.js"></script>
+</body>
+</html>

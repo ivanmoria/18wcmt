@@ -1,0 +1,10 @@
+src/
+assets/py/
+assets/data/*.xlsx
+_rascunho/
+.DS_Store
+**/.DS_Store
+WCMT_final.Rmd
+WCMT_final2.Rmd
+Markdownfinal_WCMT.html
+DOSSIE*.md
